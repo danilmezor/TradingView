@@ -1,0 +1,145 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © gotbeatz26107
+
+//@version=5
+indicator(title='Open Interest Oscillator', shorttitle='Open Interest Oscillator', format=format.volume, overlay=false, precision = 2)
+
+// Libraries
+import gotbeatz26107/ma_/2 as ma
+
+// Indicator's Score Clipping
+clip(float value, float minVal, float maxVal) =>
+    clippedValue = math.min(math.max(value, minVal), maxVal)
+    clippedValue
+//
+
+// Input
+show_bars           = input.bool(true, 'Show OI bars', group = 'Indicator Appearance')
+show_osc            = input.bool(true, 'Show Oscillator', group = 'Indicator Appearance')
+show_signals        = input.bool(true, 'Show Signals', group = 'Indicator Appearance')
+
+cap_ceiling         = input.bool(true, 'Max OI Ceiling', group = 'Oscillator Clipping')
+cap_val             = input(4, 'Value', group = 'Oscillator Clipping')
+
+// MA Types
+averageType 		= input.string("SMA", options = ['SMA', 'EMA', 'ALMA', 'AHMA', 'BMF', 'DEMA', 'DSWF'
+     									, 'EVWMA', 'ESD', 'FRAMA', 'FLSMA', 'GMMA', 'HCF', 'HMA', 'JMA', 'KAMA', 'KIJUN'
+    			 						, 'LSMA', 'LMA', 'MD', 'MF', 'MM', 'SMMA', 'SSMA', 'SWMA', 'TEMA', 'TSF'
+									 	, 'VAR', 'VAMA', 'VMA', 'VBMA', 'VIDA', 'VWMA', 'WMA', 'QMA', 'RPMA'
+                                         , 'RSRMA', 'ZLEMA'], title = "MA Type", group = 'Moving Averages')
+
+// Bollinger Bands (Bar Mode)
+length_ma           = input.int(100, 'MA Length', group = 'OI Thresholds Settings (Bar Mode)')
+bb_length           = input.int(500, 'STDEV Length', group = 'OI Thresholds Settings (Bar Mode)')
+
+threshold1          = input.float(7 , title= "STDEV 1 OI Δ", group = 'OI Thresholds Settings (Bar Mode)')
+threshold2          = input.float(15 , title= "STDEV 2 OI Δ", group = 'OI Thresholds Settings (Bar Mode)')
+threshold3          = input.float(25 , title= "STDEV 3 OI Δ", group = 'OI Thresholds Settings (Bar Mode)')
+threshold4          = input.float(35 , title= "STDEV 4 OI Δ", group = 'OI Thresholds Settings (Bar Mode)')
+
+// MTF Tresholds (Oscillator mode)
+high_threshold      = input.float(title='High Threshold', defval=0.4, group = 'OI Thresholds Settings (Oscillator Mode)')
+low_threshold       = input.float(title='Low Threshold', defval=-0.4), group = 'OI Thresholds Settings (Oscillator Mode)'
+
+// OI data
+currency            = syminfo.basecurrency
+xbt                 = currency =='BTC' ? 'XBT' : string(currency)
+delta               = close - close[1]
+
+[oid1, oic1, oio1, oih1, oil1] = request.security('BINANCE' + ":" + string(currency) + 'USDT.P_OI',
+                                 timeframe.period, [delta, close, open, high, low], ignore_invalid_symbol = true)
+[oid2, oic2, oio2, oih2, oil2] = request.security('BINANCE' + ":" + string(currency) + 'USD.P_OI',
+                                 timeframe.period, [delta, close, open, high, low], ignore_invalid_symbol = true)
+[oid3, oic3, oio3, oih3, oil3] = request.security('BINANCE' + ":" + string(currency) + 'BUSD.P_OI',
+                                 timeframe.period, [delta, close, open, high, low], ignore_invalid_symbol = true)
+[oid4, oic4, oio4, oih4, oil4] = request.security('BITMEX' + ":" + xbt + 'USD.P_OI',
+                                 timeframe.period, [delta, close, open, high, low], ignore_invalid_symbol = true)
+[oid5, oic5, oio5, oih5, oil5] = request.security('BITMEX' + ":" + xbt + 'USDT.P_OI',
+                                 timeframe.period, [delta, close, open, high, low], ignore_invalid_symbol = true)
+[oid6, oic6, oio6, oih6, oil6] = request.security('KRAKEN'  + ":" + string(currency) + 'USD.P_OI',
+                                 timeframe.period,  [delta, close, open, high, low], ignore_invalid_symbol = true)
+
+oid7 = request.security('BITFINEX:BTCUSDLONGS', timeframe.period, delta) + request.security('BITFINEX:BTCUSDSHORTS', timeframe.period, delta) +
+         request.security('BITFINEX:BTCUSTLONGS', timeframe.period, delta) + request.security('BITFINEX:BTCUSTSHORTS', timeframe.period, delta)
+oio7  = request.security('BITFINEX:BTCUSDLONGS', timeframe.period, open) + request.security('BITFINEX:BTCUSDSHORTS', timeframe.period, open) +
+         request.security('BITFINEX:BTCUSTLONGS', timeframe.period, open) + request.security('BITFINEX:BTCUSTSHORTS', timeframe.period, open)
+oic7 = request.security('BITFINEX:BTCUSDLONGS', timeframe.period, close) + request.security('BITFINEX:BTCUSDSHORTS', timeframe.period, close) +
+         request.security('BITFINEX:BTCUSTLONGS', timeframe.period, close) + request.security('BITFINEX:BTCUSTSHORTS', timeframe.period, close)
+oih7  = request.security('BITFINEX:BTCUSDLONGS', timeframe.period, high) + request.security('BITFINEX:BTCUSDSHORTS', timeframe.period, high) +
+         request.security('BITFINEX:BTCUSTLONGS', timeframe.period, high) + request.security('BITFINEX:BTCUSTSHORTS', timeframe.period, high)
+oil7   = request.security('BITFINEX:BTCUSDLONGS', timeframe.period, low) + request.security('BITFINEX:BTCUSDSHORTS', timeframe.period, low) +
+         request.security('BITFINEX:BTCUSTLONGS', timeframe.period, low) + request.security('BITFINEX:BTCUSTSHORTS', timeframe.period, low)
+
+deltaOI = currency == 'BTC' ? (nz(oid1,0) + nz(oid2,0)/close + nz(oid3,0) + nz(oid4,0)/close + nz(oid5,0)/close + nz(oid6,0)/close) + nz(oid7,0) :
+                         (nz(oid1,0) + nz(oid2,0)/close + nz(oid3,0) + nz(oid4,0)/close + nz(oid5,0)/close + nz(oid6,0)/close)
+
+// Bollinger bands
+deltaOI_SMA_POS         = ma.selector(deltaOI > 0 ? deltaOI : na, length_ma, averageType)
+deltaOI_SMA_NEG         = ma.selector(deltaOI < 0 ? deltaOI : na, length_ma, averageType)
+deltaOI_SMA_NEG_STDEV   = ta.stdev(deltaOI_SMA_NEG, bb_length)
+deltaOI_SMA_POS_STDEV   = ta.stdev(deltaOI_SMA_POS, bb_length)
+
+up1                 = deltaOI_SMA_POS_STDEV * threshold1
+up2                 = deltaOI_SMA_POS_STDEV * threshold2
+up3                 = deltaOI_SMA_POS_STDEV * threshold3
+up4                 = deltaOI_SMA_POS_STDEV * threshold4
+
+dn1                 = -deltaOI_SMA_NEG_STDEV * threshold1
+dn2                 = -deltaOI_SMA_NEG_STDEV * threshold2
+dn3                 = -deltaOI_SMA_NEG_STDEV * threshold3
+dn4                 = -deltaOI_SMA_NEG_STDEV * threshold4
+
+Open = currency == 'BTC' ? nz(oio1, 0) + nz(oio2, 0) + nz(oio3, 0) + nz(oio4, 0) + nz(oio5, 0) + nz(oio6, 0) + nz(oio7, 0) : 
+                         nz(oio1, 0) + nz(oio2, 0) + nz(oio3, 0) + nz(oio4, 0) + nz(oio5, 0) + nz(oio6, 0)
+Close = currency == 'BTC' ? nz(oic1, 0) + nz(oic2, 0) + nz(oic3, 0) + nz(oic4, 0) + nz(oic5, 0) + nz(oic6, 0) + nz(oic7, 0) :
+                         nz(oic1, 0) + nz(oic2, 0) + nz(oic3, 0) + nz(oic4, 0) + nz(oic5, 0) + nz(oic6, 0)
+High = currency == 'BTC' ? nz(oih1, 0) + nz(oih2, 0) + nz(oih3, 0) + nz(oih4, 0) + nz(oih5, 0) + nz(oih6, 0) + nz(oih7, 0) :
+                         nz(oih1, 0) + nz(oih2, 0) + nz(oih3, 0) + nz(oih4, 0) + nz(oih5, 0) + nz(oih6, 0)
+Low = currency == 'BTC' ? nz(oil1, 0) + nz(oil2, 0) + nz(oil3, 0) + nz(oil4, 0) + nz(oil5, 0) + nz(oil6, 0) + nz(oil7, 0) :
+                         nz(oil1, 0) + nz(oil2, 0) + nz(oil3, 0) + nz(oil4, 0) + nz(oil5, 0) + nz(oil6, 0)
+
+o                   = Open * close
+h                   = High * close
+l                   = Low * close
+c                   = Close * close
+
+op                  = o / ta.sma(o, 20) + o / ta.sma(o, 60) + o / ta.sma(o, 120) 
+hp                  = h / ta.sma(h, 20) + h / ta.sma(h, 60) + h / ta.sma(h, 120) 
+lp                  = l / ta.sma(l, 20) + l / ta.sma(l, 60) + l / ta.sma(l, 120) 
+cp                  = c / ta.sma(c, 20) + c / ta.sma(c, 60) + c / ta.sma(c, 120) 
+oi_hlc3             = ((hp + lp + cp) / 3 - 3) // -3 to center the line on plot
+
+// Clip according to max ceiling value
+oi_hlc3             := cap_ceiling ? clip(oi_hlc3, cap_val * -1, cap_val) : oi_hlc3
+
+// Colors 
+white               = color.white
+gray                = color.gray
+green               = color.new(color.teal, 0)
+green_signal        = color.rgb(0, 137, 123, 50)
+red                 = color.new(color.red, 0)
+red_signal          = color.rgb(255, 82, 82, 50)
+blank               = color.rgb(0, 0, 0, 100)
+column_color        = delta > 0 ? green : red
+
+// Plot
+plot(0, color= gray, title = 'Zero Line')
+
+plot(show_bars ? up1 : na, color = gray, title = 'STDEV 1')
+plot(show_bars ? up2 : na, color = gray, title = 'STDEV 2')
+plot(show_bars ? up3 : na, color = gray, title = 'STDEV 3')
+plot(show_bars ? up4 : na, color = gray, title = 'STDEV 4')
+plot(show_bars ? dn1 : na, color = gray, title = 'STDEV -1')
+plot(show_bars ? dn2 : na, color = gray, title = 'STDEV -2')
+plot(show_bars ? dn3 : na, color = gray, title = 'STDEV -3')
+plot(show_bars ? dn4 : na, color = gray, title = 'STDEV -4')
+
+plot(show_bars ? deltaOI : na, color = column_color, style = plot.style_columns, title = 'Bars')
+
+plot(show_osc ? oi_hlc3 : na, color = white, title = 'Oscillator')
+plot(show_osc ? high_threshold : na, color = red, title = 'High Threshold')
+plot(show_osc ? low_threshold : na, color = green, title = 'Low Threshold')
+
+// Signals
+bgcolor(oi_hlc3 > high_threshold and show_signals ? red_signal : blank, title = 'Red Signal')
+bgcolor(oi_hlc3 < low_threshold and show_signals ? green_signal : blank, title = 'Green Signal')
