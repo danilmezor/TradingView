@@ -1,0 +1,172 @@
+//@version=5
+indicator('Market Health Monitor', shorttitle = 'MHM', overlay = false, precision = 2)
+
+// Libraries
+import gotbeatz26107/ma_/2 as ma
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                              General Parameters                                                    //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+timeframe               = input.string('1M', 'Indicator Timeframe', ['1D', '3D', '1W', '2W', '1M'], group = 'General Settings')
+averageType 		= input.string("VWMA", options = ['SMA', 'EMA', 'ALMA', 'DEMA', 'HMA'
+     									, 'JMA', 'KAMA', 'SMMA', 'TMA', 'TSF'
+    			 						, 'VAR', 'VMA', 'VAMA', 'VWMA', 'WMA'
+									 	,'WWMA', 'ZLEMA'], title = "MA Type", group = 'General Settings')
+
+recession_threshold     = input(50, title = 'Recession Threshold', group = 'Oscillator Thresholds')
+growth_threshold        = input(25, title = 'Expansion Thresholds', group = 'Oscillator Thresholds')
+
+instrument              = input.string('SPX', title = 'Stock Market Index', options = ['SPX', 'NDX', 'RTY'], group = 'Market Performance')
+
+ma_1                    = input(3, '1 - ', group = 'Moving Average Lengths')
+ma_2                    = input(12, '2 - ', group = 'Moving Average Lengths')
+ma_3                    = input(36, '3 - ', group = 'Moving Average Lengths')
+ma_4                    = input(120, '4 - ', group = 'Moving Average Lengths')
+
+loans_threshold         = input(20, 'Net % of Banks Started Loans Tightening', group = 'Loans')
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                              Economic Indicators                                                   //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Unemployment Rate
+// A lagging indicator that increases in economic downturns. 
+// High or rising unemployment indicates reduced consumer spending and economic stress.
+un_rate                 = request.security('UNRATE', timeframe, close)
+un_rate_1               = ma.selector(un_rate, ma_1, averageType)
+un_rate_2               = ma.selector(un_rate, ma_2, averageType)
+un_rate_3               = ma.selector(un_rate, ma_3, averageType)
+
+un_score                = (un_rate > un_rate_1 ? 50 : 0) + (un_rate_1 > un_rate_2 ? 25 : 0) 
+                         + (un_rate_2 > un_rate_3 ? 25 : 0)
+un_count                = na(un_rate) ? 0 : 1
+
+// Inflation rate 
+// Reflects the cost of living and purchasing power. 
+// Persistent high inflation can lead to economic instability, while deflation can signal weak demand.
+infl_rate               = request.security('USIRYY', timeframe, close)
+infl_count              = na(infl_rate) ? 0 : 1
+infl_threshold          = 1.0
+
+infl_poc                = ta.percentile_linear_interpolation(infl_rate, ma_4, 50)
+infl_delta              = math.abs(infl_rate - infl_poc)
+
+infl_score              = infl_delta > infl_threshold ? 100 : 0
+
+// FED Funds Rate
+// Indicates the stance of monetary policy. 
+// Changes in the rate can influence economic activity, borrowing costs, and investor sentiment.
+funds_rate              = request.security('FEDFUNDS', timeframe, close)
+funds_rate_1            = ma.selector(funds_rate, ma_1, averageType)
+funds_rate_2            = ma.selector(funds_rate, ma_2, averageType)
+funds_rate_3            = ma.selector(funds_rate, ma_3, averageType)
+
+funds_score             = (funds_rate <= funds_rate[1] ? 25 : 0) + (funds_rate_1 <= funds_rate_1[1] ? 25 : 0)
+                         + (funds_rate_2 <= funds_rate_2[1] ? 25 : 0) + (funds_rate_3 <= funds_rate_3[1] ? 25 : 0)
+funds_count             = na(funds_rate) ? 0 : 1
+
+
+// Consumer Confidence Index
+// A leading indicator that can predict consumer spending and economic activity, 
+// as it reflects the public’s perception of the economy.
+cci_ind                 = request.security('USCCI', timeframe, close)
+cci_1                   = ma.selector(cci_ind, ma_1, averageType)
+cci_2                   = ma.selector(cci_ind, ma_2, averageType)
+cci_3                   = ma.selector(cci_ind, ma_3, averageType)
+
+cci_score               = (cci_ind < cci_1 ? 50 : 0) + (cci_1 < cci_2 ? 25 : 0) + (cci_2 < cci_3 ? 25 : 0) 
+cci_count               = na(cci_ind) ? 0 : 1
+
+// Housing Market Index
+// The housing market often leads the economy into recession and recovery. 
+// Weakness here can signal broader economic problems.
+house_index             = request.security('USHMI', timeframe, close)
+house_poc               = ta.percentile_linear_interpolation(house_index, ma_4, 50)
+
+house_score             = house_index < house_poc ? 100 : 0
+house_count             = na(house_index) ? 0 : 1
+
+// Crude Oil
+// Oil is one of the main commodities needed for transportation and economical operations.
+// If demand and price of it is going down - it could be a signal of economic weakness. 
+crude_oil               = request.security('UKOIL', timeframe, close)
+crude_1                 = ma.selector(crude_oil, ma_1, averageType)
+crude_2                 = ma.selector(crude_oil, ma_2, averageType)
+crude_3                 = ma.selector(crude_oil, ma_3, averageType)
+
+oil_score               = (crude_oil < crude_1 ? 50 : 0) + (crude_oil < crude_2 ? 25 : 0) + (crude_oil < crude_3 ? 25 : 0)
+oil_count               = (na(crude_oil) or na(crude_1) or na(crude_2) or na(crude_3)) ? 0 : 1
+
+// Net Percentage Of Domestic Banks Tightening Credit Standarts
+// Indicates banks' perceptions of economic risk and can affect business and consumer spending.
+consumer_loans          = request.security('DRTSCLCC', timeframe, close)
+small_biz_loans         = request.security('DRTSCIS', timeframe, close)
+big_biz_loans           = request.security('DRTSCILM', timeframe, close)
+
+consumer_score          = consumer_loans >= loans_threshold ? 100 : 0
+small_biz_score         = small_biz_loans >= loans_threshold ? 100 : 0
+big_biz_score           = big_biz_loans >= loans_threshold ? 100 : 0
+
+// consumer_count       = na(consumer_loans) ? 0 : 1
+// small_biz_count      = na(small_biz_loans) ? 0 : 1
+// big_biz_count        = na(big_biz_loans) ? 0 : 1
+// loans_avg            = consumer_count + small_biz_count + big_biz_count
+
+loans_score             = (consumer_score + small_biz_score + big_biz_score) / 3
+loans_count             = na(loans_score) ? 0 : 1
+
+
+// Stock Market Growth Rate
+index                   = request.security(instrument, timeframe, close)
+index_ma                = ma.selector(index, ma_2, averageType)
+
+delta                   = index_ma - index_ma[1]
+growthrate              = (delta / index_ma[1]) * 100
+growth_count            = na(growthrate) ? 0 : 1
+
+growth_score            = growthrate <= 0 ? 100 : 0
+
+
+// Federal Reserve GDP/Growth
+gdp_growth              = request.security("GDPC1", timeframe, close)
+gdp_count               = na(gdp_growth) ? 0 : 1
+var gdp_score = 0
+if gdp_growth>gdp_growth[1]
+    gdp_score := 0
+if gdp_growth<gdp_growth[1]
+    gdp_score := 100
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                              Score Calculations                                                    //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+indicator_count         = un_count + infl_count + funds_count + cci_count + house_count + oil_count 
+                         + growth_count + gdp_count + loans_count
+
+score = (un_score + infl_score + funds_score + cci_score + house_score + oil_score + growth_score + gdp_score + loans_score) 
+                  / indicator_count
+
+// Indicator states
+econ_downtrend          = score > recession_threshold
+econ_uptrend            = score < growth_threshold
+recessions              = request.security("USREC", timeframe, close) // Actual Recessions
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                    Plotting                                                        //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Colors 
+white                   = color.white
+green_signal            = color.rgb(0, 137, 123, 50)
+red_signal              = color.rgb(255, 82, 82, 50)
+red_recession           = color.new(#ff5252, 60)
+
+bgcolor(econ_downtrend ? red_signal : na, title = 'Downtrend')
+bgcolor(econ_uptrend ? green_signal : na, title = 'Uptrend')
+bgcolor(recessions ? red_recession : na, title = 'Recession')
+
+// Plots
+plot(score, color = white, title = 'Oscillator Score', linewidth = 2)
+hline(recession_threshold, 'Recession Threshold')
+hline(growth_threshold, title = 'Expansion Threshold')
