@@ -1,0 +1,587 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © gotbeatz26107
+
+//@version=5
+indicator("Blockchain fundamental", shorttitle = "BF V0.1", overlay = false, precision = 2)
+
+// Libraries
+import gotbeatz26107/ma_/2 as ma
+
+// Indicator settings
+htfInterval         = input.timeframe("D", title = 'Timeframe', options = ['D', '3D', 'W', '2W', 'M'], 
+                                 group = 'Indicator settings', inline = '1')
+
+average_type 		= input.string	("JMA", options = ['SMA', 'EMA', 'ALMA', 'DEMA', 'HMA'
+     									, 'JMA', 'KAMA', 'SMMA', 'TMA', 'TSF'
+    			 						, 'VAR', 'VMA', 'VAMA', 'VWMA', 'WMA'
+									 	,'WWMA', 'ZLEMA'], inline = '1', title = "Moving Average Type", group = 'Indicator settings')
+
+osc_ma_length       = input.int(90, title = "MA length", group = "Indicator settings")
+
+Sharpness           = input.float(25.0, "Sharpness", group = "Kalman Filter", inline = "kf")
+K                   = input.float(1.0, "Filter Period", group = "Kalman Filter", inline = "kf")
+use_kalman          = input.bool(true, title = "Use kalman filter for signals?", group = "Kalman Filter")
+
+incl_balance        = input.bool(true, group = "Metrics", title = "Mean value an address holds")
+incl_drawdown       = input.bool(true, group = "Metrics", title = "ATH drawdown")
+incl_sopr           = input.bool(true, group = "Metrics", title = "Spent Optput Profit ratio")
+incl_mvrv           = input.bool(true, group = "Metrics", title = "Market Cap to Realised Cap ratio")
+incl_pnl_perc       = input.bool(true, group = "Metrics", title = "Profit/Loss delta")
+incl_mcap           = input.bool(true, group = "Metrics", title = "MCAP/real MCAP ratio")
+incl_mcap_ratio     = input.bool(true, group = "Metrics", title = "MCAP/ Stablecoin MCAP ratio")
+incl_tx_large       = input.bool(true, group = "Metrics", title = "Transfers > $100.000")
+incl_hashrate       = input.bool(true, group = "Metrics", title = "Hashrate time delta")
+incl_miner_rev      = input.bool(true, group = "Metrics", title = "Miner revenue/number of tx's")
+incl_miner_fees     = input.bool(true, group = "Metrics", title = "Miner fees time delta")
+
+// Kalman filter
+kalman_filter(src, Sharpness, K) =>
+    
+    velocity = 0.0
+    kfilt = 0.0
+
+    Distance = src - nz(kfilt[1], src)
+    Error = nz(kfilt[1], src) + Distance * math.sqrt(Sharpness*K/ 100)
+    velocity := nz(velocity[1], 0) + Distance*K / 100
+    kfilt := Error + velocity
+    kfilt
+//
+
+// Function to calculate bollinger bands deviation
+bbr(float src, int length) =>
+
+    basis = ma.selector(src, length, average_type)
+    dev = 1 * ta.stdev(src, length)
+
+    upper = basis + dev
+    lower = basis - dev
+    bbr = (src - lower)/(upper - lower)
+
+    //Output
+    bbr
+//
+
+// Profiler function
+profiler(float src, float percentile, int lookback) =>
+    poc_val = ta.percentile_linear_interpolation(src, lookback, 50)
+    lower_boundary_val = ta.percentile_linear_interpolation(src, lookback, 100 - percentile)
+    upper_boundary_val = ta.percentile_linear_interpolation(src, lookback, percentile)
+    [poc_val, lower_boundary_val, upper_boundary_val]
+
+//
+// Convert Timeframe
+getTimeframeMinutes(timeframe) =>
+
+    // Input
+    minutes = 0
+
+    // Conversion
+    if timeframe == '5'
+        minutes := 5
+    if timeframe == '10'
+        minutes := 10
+    if timeframe == '15'
+        minutes := 15
+    if timeframe == '30'
+        minutes := 30
+    if timeframe == '60'
+        minutes := 60
+    if timeframe == '120'
+        minutes := 120        
+    if timeframe == '240'
+        minutes := 240
+    if timeframe == '720'
+        minutes := 720
+    if timeframe == 'D'
+        minutes := 1440
+    if timeframe == '3D'
+        minutes := 4320
+    if timeframe == 'W'
+        minutes := 10080
+    if timeframe == '2W'
+        minutes := 20160
+    if timeframe == 'M'
+        minutes := 43200
+
+    // Output
+    minutes
+//
+calculateTimeframeRatio(htf) =>
+    getTimeframeMinutes(htf) / getTimeframeMinutes(timeframe.period)
+tf_ratio            = calculateTimeframeRatio(htfInterval) 
+//
+
+percentile          = input(99, title = "Value Area Percentile", inline = 'l2', group = "Indicator settings")
+lookback            = input(365, title = "Lookback period", inline = 'l2', group = "Indicator settings") * tf_ratio
+
+bound_up            = input(90.0, title = "Upper bound", inline = "b1", group = "Bounds")
+bound_dn            = input(-90.0, title = "Lower bound", inline = "b1", group = "Bounds")
+
+//--------------------------------------------------------------------------------------------------------------------//
+//----------------------------------------------------Calculation-----------------------------------------------------//
+//--------------------------------------------------------------------------------------------------------------------//
+
+// USD value of all coins based on a close price of the day they last moved
+mcap_real           = request.security("COINMETRICS:" + syminfo.basecurrency + "_MARKETCAPREAL", htfInterval, close, ignore_invalid_symbol = true)
+// Market Cap
+mcap                = request.security("GLASSNODE:" + syminfo.basecurrency + "_MARKETCAP", htfInterval, close, ignore_invalid_symbol = true)
+
+mcap() =>
+
+    mcap_ratio = mcap / mcap_real
+
+    mcap_ratio_90 = ma.selector(mcap_ratio, 90 * tf_ratio, average_type)
+    mcap_ratio_365 = ma.selector(mcap_ratio, 365 * tf_ratio, average_type)
+
+    mcap_score = 0
+
+    if mcap_ratio >= mcap_ratio_365
+        mcap_score += 25
+    if mcap_ratio_90 >= mcap_ratio_365
+        mcap_score += 25
+    if mcap_ratio >= 2
+        mcap_score += 25
+    if mcap_ratio >= 3
+        mcap_score += 25
+
+    if mcap_ratio <= mcap_ratio_365
+        mcap_score -= 25
+    if mcap_ratio_90 <= mcap_ratio_365
+        mcap_score -= 25
+    if mcap_ratio <= 2
+        mcap_score -= 25
+    if mcap_ratio <= 1
+        mcap_score -= 25
+
+    // Output
+    mcap_score
+//
+
+// Spent Output Profit Ratio (SOPR)
+sopr                = request.security("GLASSNODE:" + syminfo.basecurrency + "_SOPR", htfInterval, close, ignore_invalid_symbol = true)
+sopr() =>
+
+    // Calculation
+    length          = 30 * tf_ratio
+    sopr_ma         = ma.selector(sopr, length, average_type)
+
+    // Logic
+    soprScore = 0
+
+    if sopr_ma < 1
+        soprScore -= 25
+    if sopr_ma < 0.995
+        soprScore -= 25
+    if sopr_ma < 0.990
+        soprScore -= 25        
+    if sopr_ma < 0.985
+        soprScore -= 25
+
+    if sopr_ma > 1
+        soprScore += 25
+    if sopr_ma > 1.005
+        soprScore += 25
+    if sopr_ma > 1.010
+        soprScore += 25
+    if sopr_ma > 1.015
+        soprScore += 25
+
+    // Output
+    soprScore
+//
+
+// Percentage of addresses that are profiting at current price
+profit_perc         = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_INOUTMONEYINPERCENTAGE", htfInterval, close, ignore_invalid_symbol = true)
+// Percentage of break even addresses out of all addresses holding this asset
+even_perc           = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_BREAKEVENADDRESSESPERCENTAGE", htfInterval, close, ignore_invalid_symbol = true)
+// Percentage of addresses that are losing at current price
+loss_perc           = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_INOUTMONEYOUTPERCENTAGE", htfInterval, close, ignore_invalid_symbol = true)
+
+pnl_perc() =>
+
+    net_pnl_perc = (profit_perc + even_perc) - (loss_perc + even_perc)
+
+    pnl_perc_score = 0
+
+    if net_pnl_perc <= 0.5
+        pnl_perc_score -= 20
+    if net_pnl_perc <= 0.4
+        pnl_perc_score -= 20
+    if net_pnl_perc <= 0.3
+        pnl_perc_score -= 20
+    if net_pnl_perc <= 0.2
+        pnl_perc_score -= 20
+    if net_pnl_perc <= 0.1
+        pnl_perc_score -= 20
+
+    if net_pnl_perc >= 0.5
+        pnl_perc_score += 20
+    if net_pnl_perc >= 0.6
+        pnl_perc_score += 20
+    if net_pnl_perc >= 0.7
+        pnl_perc_score += 20
+    if net_pnl_perc >= 0.8
+        pnl_perc_score += 20
+    if net_pnl_perc >= 0.9
+        pnl_perc_score += 20
+
+    // Output
+    pnl_perc_score
+//
+
+// Price Drawdown from ATH
+ath_drawdown        = request.security("GLASSNODE:" + syminfo.basecurrency + "_ATHDRAWDOWN", htfInterval, close, ignore_invalid_symbol = true)
+
+drawdown_score() =>
+
+    [poc_val, _, _] = profiler(ath_drawdown, percentile, lookback)
+
+    ath_drawdown_score = 0
+
+    if ath_drawdown >= poc_val
+        ath_drawdown_score += 25
+    if ath_drawdown >= -0.05
+        ath_drawdown_score += 25
+    if ath_drawdown >= (-0.05 - poc_val) / 2
+        ath_drawdown_score += 25
+    if ath_drawdown >= (-0.05 - poc_val) / 3
+        ath_drawdown_score += 25
+
+    if ath_drawdown <= poc_val
+        ath_drawdown_score -= 25
+    if ath_drawdown <= -0.7
+        ath_drawdown_score -= 25
+    if ath_drawdown <= (-0.7 + poc_val) / 2
+        ath_drawdown_score -= 25   
+    if ath_drawdown <= (-0.7 + poc_val) / 3
+        ath_drawdown_score -= 25
+
+    // Output
+    ath_drawdown_score
+//
+
+// Market Cap to Realised cap ratio (MVRV)
+mvrv                = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_MVRV", htfInterval, close, ignore_invalid_symbol = true)
+
+mvrv() =>
+
+    mvrv_score = 0
+    mvrv_30 = ma.selector(mvrv, 30 * tf_ratio, average_type)
+    mvrv_1y = ma.selector(mvrv, 365 * tf_ratio, average_type)
+
+
+    if mvrv < 2
+        mvrv_score -= 25
+    if mvrv < 1
+        mvrv_score -= 25
+    if mvrv_30 < 1
+        mvrv_score -= 25
+    if mvrv < mvrv_1y
+        mvrv_score -= 25
+
+    if mvrv > 3
+        mvrv_score += 25
+    if mvrv > 2
+        mvrv_score += 25
+    if mvrv_30 > 2
+        mvrv_score += 25
+    if mvrv > mvrv_1y
+        mvrv_score += 25
+
+    // output
+    mvrv_score
+//
+
+// Mean Value an address holds
+avg_balance         = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_AVGTXUSD", htfInterval, close, ignore_invalid_symbol = true)
+
+avg_balance() =>
+
+    avg_balance_30 = ma.selector(math.log(avg_balance), 30 * tf_ratio, average_type)
+    avg_balance_90 = ma.selector(math.log(avg_balance), 90 * tf_ratio, average_type)
+
+    // Extract values from the profiler
+    [poc_val, lower_boundary_val, upper_boundary_val] = profiler(avg_balance_30, percentile, lookback)
+
+    avg_balance_score = 0
+
+    if avg_balance_30 >= poc_val
+        avg_balance_score += 25
+    if avg_balance_30 >= upper_boundary_val
+        avg_balance_score += 25
+    if avg_balance_30 >= avg_balance_90
+        avg_balance_score += 25
+    if avg_balance_90 >= poc_val
+        avg_balance_score += 25
+
+    if avg_balance_30 <= poc_val
+        avg_balance_score -= 25
+    if avg_balance_30 <= lower_boundary_val
+        avg_balance_score -= 25
+    if avg_balance_30 <= avg_balance_90
+        avg_balance_score -= 25
+    if avg_balance_90 <= poc_val
+        avg_balance_score -= 25
+
+    // Output
+    avg_balance_score
+//
+
+// Sum of all transfers > $100.000 in a day in USD
+tx_large_usd        = request.security("COINMETRICS:" + syminfo.basecurrency + "_LARGETXVOLUMEUSD", htfInterval, close, ignore_invalid_symbol = true)
+
+tx_large() =>
+
+    tx_large_30 = ma.selector(math.log(tx_large_usd), 30 * tf_ratio, average_type)
+    tx_large_90 = ma.selector(math.log(tx_large_usd), 90 * tf_ratio, average_type)
+
+    [poc_val, lower_boundary_val, upper_boundary_val] = profiler(tx_large_30, percentile, lookback)
+
+    tx_large_score = 0
+
+    if tx_large_30 >= tx_large_90
+        tx_large_score += 25
+    if tx_large_30 >= poc_val
+        tx_large_score += 25
+    if tx_large_30 >= upper_boundary_val
+        tx_large_score += 25
+    if tx_large_90 >= poc_val
+        tx_large_score += 25
+
+    if tx_large_30 <= tx_large_90
+        tx_large_score -= 25
+    if tx_large_30 <= poc_val
+        tx_large_score -= 25
+    if tx_large_30 <= lower_boundary_val
+        tx_large_score -= 25
+    if tx_large_90 <= poc_val
+        tx_large_score -= 25
+
+    // Output
+    tx_large_score
+//
+
+// Mean Hash Rate
+hashRate            = request.security("GLASSNODE:" + syminfo.basecurrency + "_HASHRATE", htfInterval, close, ignore_invalid_symbol = true)
+
+
+hashrate() =>
+
+    hashRate_30 = math.log(ma.selector(hashRate, 30 * tf_ratio, average_type))
+    hashRate_60 = math.log(ma.selector(hashRate, 60 * tf_ratio, average_type))
+
+    hashrate_delta = hashRate_30 - hashRate_60
+
+    hashrate_1y = ma.selector(hashrate_delta, 365 * tf_ratio, average_type)
+    hashrate_90 = ma.selector(hashrate_delta, 90 * tf_ratio, average_type)
+
+    hash_score = 0
+
+    if hashrate_delta >= 0
+        hash_score += 25
+    if hashrate_delta >= hashrate_90
+        hash_score += 25
+    if hashrate_delta >= hashrate_1y
+        hash_score += 25
+    if hashrate_90 >= hashrate_1y
+        hash_score += 25
+
+    if hashrate_delta <= hashrate_90
+        hash_score -= 25
+    if hashrate_delta <= hashrate_1y
+        hash_score -= 25
+    if hashrate_delta <= 0
+        hash_score -= 25   
+    if hashrate_90 <= hashrate_1y
+        hash_score -= 25
+
+    // Output
+    hash_score
+//
+
+// A chart showing miners revenue divided by the number of transactions.
+miner_revenue_txdivided = request.quandl("BCHAIN/CPTRA") 
+
+
+miner_rev_divided() =>
+
+    mrtd = math.log10(miner_revenue_txdivided)
+    mrtd_30 = ma.selector(mrtd, 30 * tf_ratio, average_type)
+    mrtd_90 = ma.selector(mrtd, 90 * tf_ratio, average_type)
+    mrtd_365 = ma.selector(mrtd, 365 * tf_ratio, average_type)
+    mrtd_dev = bbr(mrtd, 365 * tf_ratio)
+
+    mrtd_score = 0
+
+    if mrtd >= mrtd_30
+        mrtd_score += 20
+    if mrtd_30 >= mrtd_90
+        mrtd_score += 20
+    if mrtd_90 >= mrtd_365
+        mrtd_score += 20
+    if mrtd_dev >= 0.5
+        mrtd_score += 20
+    if mrtd_dev >= 1
+        mrtd_score += 20
+
+    if mrtd <= mrtd_30
+        mrtd_score -= 20
+    if mrtd_30 <= mrtd_90
+        mrtd_score -= 20
+    if mrtd_90 <= mrtd_365
+        mrtd_score -= 20
+    if mrtd_dev <= 0.5
+        mrtd_score -= 20
+    if mrtd_dev <= 0
+        mrtd_score -= 20
+    
+    // Output
+    mrtd_score
+//
+
+// The total value of all transaction fees paid to miners in USD (not including the coinbase value of block rewards).
+miner_fees_usd      = request.quandl("BCHAIN/TRFUS")
+
+miner_fees_usd() =>
+
+    fees_usd = math.log10(miner_fees_usd)
+    fees_30 = ma.selector(fees_usd, 30 * tf_ratio, average_type)
+    fees_90 = ma.selector(fees_usd, 90 * tf_ratio, average_type)
+    fees_365 = ma.selector(fees_usd, 365 * tf_ratio, average_type)
+    fees_dev = bbr(fees_usd, 365 * tf_ratio)
+
+    fees_score = 0
+
+    if fees_usd >= fees_30
+        fees_score += 20
+    if fees_30 >= fees_90
+        fees_score += 20
+    if fees_90 >= fees_365
+        fees_score += 20
+    if fees_dev >= 0.5
+        fees_score += 20
+    if fees_dev >= 1
+        fees_score += 20
+
+    if fees_usd <= fees_30
+        fees_score -= 20
+    if fees_30 <= fees_90
+        fees_score -= 20
+    if fees_90 <= fees_365
+        fees_score -= 20
+    if fees_dev <= 0.5
+        fees_score -= 20
+    if fees_dev <= 0
+        fees_score -= 20
+    
+    // Output
+    fees_score
+//
+
+usdt_mcap           = request.security("CRYPTOCAP:USDT", htfInterval, close)
+usdc_mcap           = request.security("CRYPTOCAP:USDC", htfInterval, close)
+dai_mcap            = request.security("CRYPTOCAP:DAI", htfInterval, close)
+
+mcap_ratio() =>
+
+    stablecoin_mcap = usdt_mcap + usdc_mcap + dai_mcap
+
+    mcap_ratio = mcap / stablecoin_mcap
+    mcap_ratio_30 = ma.selector(mcap_ratio, 30 * tf_ratio, average_type)
+    mcap_ratio_90 = ma.selector(mcap_ratio, 90 * tf_ratio, average_type)
+    mcap_ratio_365 = ma.selector(mcap_ratio, 365 * tf_ratio, average_type)
+
+    mcap_score = 0.0
+
+    if mcap_ratio >= mcap_ratio_30
+        mcap_score += 33.4
+    if mcap_ratio_30 >= mcap_ratio_90
+        mcap_score += 33.3
+    if mcap_ratio_90 >= mcap_ratio_365
+        mcap_score += 33.3
+
+    if mcap_ratio <= mcap_ratio_30
+        mcap_score -= 33.4
+    if mcap_ratio_30 <= mcap_ratio_90
+        mcap_score -= 33.3
+    if mcap_ratio_90 <= mcap_ratio_365
+        mcap_score -= 33.3
+    
+    // Output
+    mcap_score
+//
+
+balance = 0
+balance := incl_balance ? avg_balance() : 0
+drawdown = 0
+drawdown := incl_drawdown ? drawdown_score() : 0
+sopr_ = 0
+sopr_ := incl_sopr ? sopr() : 0
+mvrv_ = 0
+mvrv_ := incl_mvrv ? mvrv() : 0
+pnl = 0
+pnl := incl_pnl_perc ? pnl_perc() : 0
+mcap_ = 0
+mcap_ := incl_mcap ? mcap() : 0
+mcap_ratio_ = 0.0
+mcap_ratio_ := incl_mcap_ratio ? mcap_ratio() : 0
+tx_large_ = 0
+tx_large_ := incl_tx_large ? tx_large() : 0 
+hrate = 0
+hrate := incl_hashrate ? hashrate() : 0
+miner_rev_ = 0
+miner_rev_ := incl_miner_rev ? miner_rev_divided() : 0
+miner_fee_usd = 0
+miner_fee_usd := incl_miner_fees ? miner_fees_usd() : 0
+
+counter() => 
+
+    count = 0
+
+    if mcap() != 0 and incl_mcap
+        count += 1
+    if sopr() != 0 and incl_sopr
+        count += 1
+    if pnl_perc() != 0 and incl_pnl_perc
+        count += 1
+    if drawdown_score() != 0 and incl_drawdown
+        count += 1
+    if mvrv() != 0 and incl_mvrv
+        count += 1
+    if avg_balance() != 0 and incl_balance
+        count += 1
+    if tx_large() != 0 and incl_tx_large
+        count += 1
+    if hashrate() != 0 and incl_hashrate
+        count += 1
+    if miner_rev_divided() != 0 and incl_miner_rev
+        count += 1
+    if miner_fees_usd() != 0 and incl_miner_fees
+        count += 1
+    if mcap_ratio() != 0 and incl_mcap_ratio
+        count += 1
+    // Output
+    count
+//
+count = counter()
+
+fundamental = (balance + drawdown + sopr_ + mvrv_ + pnl + mcap_ + mcap_ratio_ + tx_large_ + hrate + miner_rev_ + miner_fee_usd ) / count
+fundamental_ma = ma.selector(fundamental, osc_ma_length * tf_ratio, average_type)
+fundamental_kalman = kalman_filter(fundamental, Sharpness, K)
+signal = use_kalman ? fundamental_kalman : fundamental
+
+//--------------------------------------------------------------------------------------------------------------------//
+//-----------------------------------------------------Plotting-------------------------------------------------------//
+//--------------------------------------------------------------------------------------------------------------------//
+
+plot(fundamental, color = color.white, title = "Signal oscillator")
+plot(fundamental_ma, color = color.yellow, title = "Signal Oscillator MA")
+plot(fundamental_kalman, color = color.orange, title = "Signal Oscillator Kalman")
+plot(count, color = color.rgb(120, 123, 134, 50), title = "Signal counter")
+
+hline(0, title = "Zero line")
+hline(bound_up, title = "Bound up")
+hline(bound_dn, title = "Bound down")
+
+bgcolor(signal >= bound_up ? color.red : na, title = "Buy signal color")
+bgcolor(signal <= bound_dn ? color.teal : na, title = "Sell signal color")
