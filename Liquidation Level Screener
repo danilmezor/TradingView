@@ -1,0 +1,319 @@
+//@version=5
+indicator('Liquidation Level Screener', shorttitle = 'LLS', overlay=true, max_lines_count=500, max_boxes_count=120, max_labels_count=1)
+
+// Libraries
+import gotbeatz26107/ma_/2 as ma
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                               General Parameters                                                   //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Input
+show_line           = input(true, title="Show lines", group = 'Plotting Parameters', inline = 'l1')
+show_hist           = input(true, title="Show histogram", group = 'Plotting Parameters', inline = 'l1')
+
+tip = 'In order for indicator to work, you need to keep at least one of the level groups on the chart'
+showl1              = input(true, title="Show Liquidations Level 1", tooltip = tip, group = 'Plotting Parameters')
+showl2              = input(true, title="Show Liquidations Level 2", tooltip = tip, group = 'Plotting Parameters')
+showl3              = input(true, title="Show Liquidations Level 3", tooltip = tip, group = 'Plotting Parameters')
+show_params         = input(false, title="Show OI delta parameters", tooltip = tip, group = 'Plotting Parameters')
+
+// Moving Average
+ma_length           = input(80, title="Length", group = 'Moving average')
+averageType 		= input.string("VWMA", options = ['SMA', 'EMA', 'ALMA', 'AHMA', 'BMF', 'DEMA', 'DSWF'
+     									, 'EVWMA', 'ESD', 'FRAMA', 'FLSMA', 'GMMA', 'HCF', 'HMA', 'JMA', 'KAMA', 'KIJUN'
+    			 						, 'LSMA', 'LMA', 'MD', 'MF', 'MM', 'SMMA', 'SSMA', 'SWMA', 'TEMA', 'TSF'
+									 	, 'VAR', 'VAMA', 'VMA', 'VBMA', 'VIDA', 'VWMA', 'WMA', 'QMA', 'RPMA'
+                                         , 'RSRMA', 'ZLEMA'], title = "Type", group = 'Moving Averages')
+
+// Input Source
+src                 = input(ohlc4, title = 'Source', group = 'Indicator Source')
+
+// Histogram Settings
+hist_amnt           = input(30, 'Number of histograms (density)', group = 'Histogram settings')
+bars_amnt           = input(1000, 'Number of bars to lookback', group = 'Histogram settings')
+dist_from_candle    = input(5, 'Histgram distance from last candle', group = 'Histogram settings')
+
+// Liquidation levels
+lines_amnt          = input(1000, title="Number of lines to plot", group = 'Line settings')
+h3                  = input.float(3.4, step = 0.1, title="Large Liquidation Level", group = 'Line settings')
+h2                  = input.float(2.2, step = 0.1, title="Middle Liquidation Level", group = 'Line settings')
+h1                  = input.float(1.8, step = 0.1, title="Small Liquidation Level", group = 'Line settings')
+
+// Colors
+color_5x            = input.color(color.rgb(179, 181, 190, 70), '5x Leverage color', group='Colors')
+color_10x           = input.color(color.rgb(0, 137, 123, 70), '10x Leverage color', group='Colors')
+color_25x           = input.color(color.rgb(255, 235, 59, 70), '25x Leverage color', group='Colors')
+color_50x           = input.color(color.rgb(255, 82, 82, 70), '50x Leverage color', group='Colors')
+color_100x          = input.color(color.rgb(136, 14, 79, 70), '100x Leverage color', group='Colors')
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                 Data Collection                                                    //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// OI data
+currency            = syminfo.basecurrency
+xbt                 = currency =='BTC' ? 'XBT' : string(currency)
+delta               = close - close[1]
+
+[oid1, oic1, oio1, oih1, oil1] = request.security('BINANCE' + ":" + string(currency) + 'USDT.P_OI',
+                                 timeframe.period, [delta, close, open, high, low], ignore_invalid_symbol = true)
+[oid2, oic2, oio2, oih2, oil2] = request.security('BINANCE' + ":" + string(currency) + 'USD.P_OI',
+                                 timeframe.period, [delta, close, open, high, low], ignore_invalid_symbol = true)
+[oid3, oic3, oio3, oih3, oil3] = request.security('BINANCE' + ":" + string(currency) + 'BUSD.P_OI',
+                                 timeframe.period, [delta, close, open, high, low], ignore_invalid_symbol = true)
+[oid4, oic4, oio4, oih4, oil4] = request.security('BITMEX' + ":" + xbt + 'USD.P_OI',
+                                 timeframe.period, [delta, close, open, high, low], ignore_invalid_symbol = true)
+[oid5, oic5, oio5, oih5, oil5] = request.security('BITMEX' + ":" + xbt + 'USDT.P_OI',
+                                 timeframe.period, [delta, close, open, high, low], ignore_invalid_symbol = true)
+[oid6, oic6, oio6, oih6, oil6] = request.security('KRAKEN'  + ":" + string(currency) + 'USD.P_OI',
+                                 timeframe.period,  [delta, close, open, high, low], ignore_invalid_symbol = true)
+
+oid7 = request.security('BITFINEX:BTCUSDLONGS', timeframe.period, delta) +
+         request.security('BITFINEX:BTCUSDSHORTS', timeframe.period, delta) +
+         request.security('BITFINEX:BTCUSTLONGS', timeframe.period, delta) +
+         request.security('BITFINEX:BTCUSTSHORTS', timeframe.period, delta)
+oio7  = request.security('BITFINEX:BTCUSDLONGS', timeframe.period, open) +
+         request.security('BITFINEX:BTCUSDSHORTS', timeframe.period, open) +
+         request.security('BITFINEX:BTCUSTLONGS', timeframe.period, open) +
+         request.security('BITFINEX:BTCUSTSHORTS', timeframe.period, open)
+oic7 = request.security('BITFINEX:BTCUSDLONGS', timeframe.period, close) +
+         request.security('BITFINEX:BTCUSDSHORTS', timeframe.period, close) +
+         request.security('BITFINEX:BTCUSTLONGS', timeframe.period, close) +
+         request.security('BITFINEX:BTCUSTSHORTS', timeframe.period, close)
+oih7  = request.security('BITFINEX:BTCUSDLONGS', timeframe.period, high) +
+         request.security('BITFINEX:BTCUSDSHORTS', timeframe.period, high) +
+         request.security('BITFINEX:BTCUSTLONGS', timeframe.period, high) +
+         request.security('BITFINEX:BTCUSTSHORTS', timeframe.period, high)
+oil7   = request.security('BITFINEX:BTCUSDLONGS', timeframe.period, low) +
+         request.security('BITFINEX:BTCUSDSHORTS', timeframe.period, low) +
+         request.security('BITFINEX:BTCUSTLONGS', timeframe.period, low) +
+         request.security('BITFINEX:BTCUSTSHORTS', timeframe.period, low)
+
+// Caclualtion
+OI_delta = currency == 'BTC' ? (nz(oid1,0) + nz(oid2,0)/close + nz(oid3,0) + nz(oid4,0)/close +
+                         nz(oid5,0)/close + nz(oid6,0)/close) + nz(oid7,0) :
+                         (nz(oid1,0) + nz(oid2,0)/close + nz(oid3,0) + nz(oid4,0)/close +
+                         nz(oid5,0)/close + nz(oid6,0)/close)
+
+OI_delta_abs        = math.abs(OI_delta)
+OI_delta_MA         = ma.selector(OI_delta, ma_length, averageType)
+OI_delta_abs_MA     = ma.selector(OI_delta_abs, ma_length, averageType)
+
+OI_delta_open_h3    = (OI_delta_abs >= OI_delta_abs_MA * h3) and OI_delta > 0
+OI_delta_open_h2    = (OI_delta_abs >= OI_delta_abs_MA * h2 and OI_delta_abs < OI_delta_abs_MA * h3) and OI_delta > 0
+OI_delta_open_h1    = (OI_delta_abs >= OI_delta_abs_MA * h1 and OI_delta_abs < OI_delta_abs_MA * h2) and OI_delta > 0
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                         Level Calculations And Plotting                                            //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Histogram
+local_high          = ta.highest(high, bars_amnt)
+local_low           = ta.lowest(low, bars_amnt)
+range_high          = local_high * (1 + local_high / local_low / 10)
+range_low           = local_low * (1 - local_high / local_low / 10)
+range_height        = range_high - range_low
+
+hist_height         = range_height / hist_amnt
+hist_lower_list     = array.new_float(hist_amnt, na)
+hist_higher_list    = array.new_float(hist_amnt, na)
+hist_data           = array.new_float()
+hist_targets        = array.new_float(hist_amnt, 0.0)
+
+var h3_array         = array.new_line()
+var h2_array         = array.new_line()
+var h1_array         = array.new_line()
+var bars_array       = array.new_box(hist_amnt, na)
+
+// Clean up drawings every tick
+for i = 0 to hist_amnt - 1
+    box.delete(array.get(bars_array, i))
+
+// Indicators funcitons
+f_drawLine(x1, x2, y_value, line_color, style, width) =>
+    line.new(x1, y_value, x2, y_value, color = line_color, style = style, width = width)
+
+f_extendArray(line_array, extend_lines) =>
+    if array.size(line_array) > 0
+        for _i = array.size(line_array) - 1 to 0 by 1
+
+            x2 = line.get_x2(array.get(line_array, _i))
+            y_value = line.get_y1(array.get(line_array, _i))
+
+            if extend_lines or bar_index - 1 == x2 - 1 and not(high > y_value and low < y_value)
+                line.set_x2(array.get(line_array, _i), bar_index + 1)
+                if bar_index == last_bar_index
+                    array.push(hist_data, y_value)
+
+calculate_leverage(pivot_value, leverage, short_sell) =>
+    short_sell ? pivot_value * (1 - leverage) : pivot_value * (1 + leverage)
+
+float y_value       = na
+int x1              = na
+int x2              = na
+line l              = na
+
+x1                  := bar_index
+x2                  := bar_index
+
+f_append(Array, l) =>
+    if array.size(Array) == lines_amnt
+        line.delete(array.shift(Array))
+    array.push(Array, l)
+
+if OI_delta_open_h3 and showl3
+    y_value := calculate_leverage(src, 0.01, true)
+    l := f_drawLine(x1, x2, y_value, color_100x, line.style_solid, 3)
+    f_append(h3_array, l)
+
+    y_value := calculate_leverage(src, 0.01, false)
+    l := f_drawLine(x1, x2, y_value, color_100x, line.style_solid, 3)
+    f_append(h3_array, l)
+
+    y_value := calculate_leverage(src, 0.02, true)
+    l := f_drawLine(x1, x2, y_value, color_50x, line.style_solid, 3)
+    f_append(h3_array, l)
+
+    y_value := calculate_leverage(src, 0.02, false)
+    l := f_drawLine(x1, x2, y_value, color_50x, line.style_solid, 3)
+    f_append(h3_array, l)
+
+    y_value := calculate_leverage(src, 0.04, true)
+    l := f_drawLine(x1, x2, y_value, color_25x, line.style_solid, 3)
+    f_append(h3_array, l)
+
+    y_value := calculate_leverage(src, 0.04, false)
+    l := f_drawLine(x1, x2, y_value, color_25x, line.style_solid, 3)
+    f_append(h3_array, l)
+
+    y_value := calculate_leverage(src, 0.1, true)
+    l := f_drawLine(x1, x2, y_value, color_10x, line.style_solid, 3)
+    f_append(h3_array, l)
+
+    y_value := calculate_leverage(src, 0.1, false)
+    l := f_drawLine(x1, x2, y_value, color_10x, line.style_solid, 3)
+    f_append(h3_array, l)
+
+    y_value := calculate_leverage(src, 0.2, true)
+    l := f_drawLine(x1, x2, y_value, color_5x, line.style_solid, 3)
+    f_append(h3_array, l)
+
+    y_value := calculate_leverage(src, 0.2, false)
+    l := f_drawLine(x1, x2, y_value, color_5x, line.style_solid, 3)
+    f_append(h3_array, l)
+
+if OI_delta_open_h2 and not OI_delta_open_h3 and showl2
+    y_value := calculate_leverage(src, 0.01, true)
+    l := f_drawLine(x1, x2, y_value, color_100x, line.style_solid, 2)
+    f_append(h2_array, l)
+
+    y_value := calculate_leverage(src, 0.01, false)
+    l := f_drawLine(x1, x2, y_value, color_100x, line.style_solid, 2)
+    f_append(h2_array, l)
+
+    y_value := calculate_leverage(src, 0.02, true)
+    l := f_drawLine(x1, x2, y_value, color_50x, line.style_solid, 2)
+    f_append(h2_array, l)
+
+    y_value := calculate_leverage(src, 0.02, false)
+    l := f_drawLine(x1, x2, y_value, color_50x, line.style_solid, 2)
+    f_append(h2_array, l)
+
+    y_value := calculate_leverage(src, 0.04, true)
+    l := f_drawLine(x1, x2, y_value, color_25x, line.style_solid, 2)
+    f_append(h2_array, l)
+
+    y_value := calculate_leverage(src, 0.04, false)
+    l := f_drawLine(x1, x2, y_value, color_25x, line.style_solid, 2)
+    f_append(h2_array, l)
+
+    y_value := calculate_leverage(src, 0.1, true)
+    l := f_drawLine(x1, x2, y_value, color_10x, line.style_solid, 2)
+    f_append(h2_array, l)
+
+    y_value := calculate_leverage(src, 0.1, false)
+    l := f_drawLine(x1, x2, y_value, color_10x, line.style_solid, 2)
+    f_append(h2_array, l)
+
+
+if OI_delta_open_h1 and not OI_delta_open_h2 and not OI_delta_open_h3 and showl1
+    y_value := calculate_leverage(src, 0.01, true)
+    l := f_drawLine(x1, x2, y_value, color_100x, line.style_dotted, 1)
+    f_append(h1_array, l)
+
+    y_value := calculate_leverage(src, 0.01, false)
+    l := f_drawLine(x1, x2, y_value, color_100x, line.style_dotted, 1)
+    f_append(h1_array, l)
+
+    y_value := calculate_leverage(src, 0.02, true)
+    l := f_drawLine(x1, x2, y_value, color_50x, line.style_dotted, 1)
+    f_append(h1_array, l)
+
+    y_value := calculate_leverage(src, 0.02, false)
+    l := f_drawLine(x1, x2, y_value, color_50x, line.style_dotted, 1)
+    f_append(h1_array, l)
+
+    y_value := calculate_leverage(src, 0.04, true)
+    l := f_drawLine(x1, x2, y_value, color_25x, line.style_dotted, 1)
+    f_append(h1_array, l)
+
+    y_value := calculate_leverage(src, 0.04, false)
+    l := f_drawLine(x1, x2, y_value, color_25x, line.style_dotted, 1)
+    f_append(h1_array, l)
+
+f_extendArray(h3_array, false)
+f_extendArray(h2_array, false)
+f_extendArray(h1_array, false)
+
+// Draw Histogram
+if barstate.islast and show_hist
+    // Define lows and highs of the histograms
+    for i = 0 to hist_amnt - 1
+        histogramLow = range_low + hist_height * i
+        histogramHigh = range_low + hist_height * (i + 1)
+        array.set(hist_lower_list, i, histogramLow)
+        array.set(hist_higher_list, i, histogramHigh)
+
+    for i = 0 to array.size(hist_data) - 1
+        y = array.get(hist_data, i)
+
+        for j = 0 to hist_amnt - 1
+            histogramLow = array.get(hist_lower_list, j)
+            histogramHigh = array.get(hist_higher_list, j)
+            if y >= histogramLow and y <= histogramHigh
+                array.set(hist_targets, j, array.get(hist_targets, j) + 1)
+
+    maxHistogramtarget = array.max(hist_targets) // add this line to get the max target value
+
+    for i = 0 to hist_amnt - 1
+        histogramLow = array.get(hist_lower_list, i)
+        histogramHigh = array.get(hist_higher_list, i)
+        histogramtarget = array.get(hist_targets, i)
+        histogramWidth = math.floor((histogramtarget + 0.49) * 2)
+
+        // Compute alpha based on the size of the histogram, max alpha is 100
+        alpha = 100 - math.floor(histogramtarget / maxHistogramtarget * 100)
+
+        // Define color based on comparison with close price
+        barColor = histogramHigh > close ? color.new(color.red, alpha) : color.new(color.teal, alpha)
+
+        // Draw histograms
+        array.set(bars_array, i, box.new(left=bar_index + dist_from_candle, top=histogramHigh, right=bar_index + dist_from_candle + histogramWidth, bottom=histogramLow, bgcolor=barColor, border_color=barColor))
+
+// Update Positions
+if barstate.islast and not show_line
+    for i=0 to array.size(h3_array) - 1
+        line.delete(array.get(h3_array, i))
+
+    for i=0 to array.size(h2_array) - 1
+        line.delete(array.get(h2_array, i))
+
+    for i=0 to array.size(h1_array) - 1
+        line.delete(array.get(h1_array, i))
+
+// Parameters for settings
+plot(show_params ? OI_delta_abs : na, color = color.red)
+plot(show_params ? OI_delta_abs_MA * h3 : na, color = color.white)
+plot(show_params ? OI_delta_abs_MA * h2 : na, color = color.yellow)
+plot(show_params ? OI_delta_abs_MA * h1 : na, color = color.orange) 
