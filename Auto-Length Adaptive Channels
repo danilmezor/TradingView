@@ -1,0 +1,185 @@
+//@version=5
+indicator("Auto-Length Adaptive Channels", max_bars_back = 5000, shorttitle = 'ALAC', overlay = true)
+
+// Libraries
+import gotbeatz26107/ma_/1 as ma
+
+// Input
+src                 = input(ohlc4, title="Source")
+length_calc         = input(true, 'Use Autolength?', group = 'Length')
+length_input        = input.int(20, title = "Usual length", minval=1, group = 'Length')
+averageType 		= input.string	("SMMA", options = ['SMA', 'EMA', 'ALMA', 'DEMA'
+     									            , 'JMA', 'KAMA', 'SMMA', 'TMA', 'TSF'
+    			 						            , 'VMA', 'VAMA', 'VWMA', 'WMA', 'ZLEMA'], title = "Moving Average Type")
+mult                = input.float(1.0, title="Channel Multiplier", group = 'Bands settings')
+mult_step           = input.float(1.5, title="Channel Multiplier Step", group = 'Bands settings')
+detrend_data        = input.bool(true, 'Use DPO instead of source data?', group='Detrend Rhythm Oscillator')
+fast_length         = input.int(3, 'Fast', group='Detrend Rhythm Oscillator', inline='dro1')
+slow_length         = input.int(21, 'Slow', group='Detrend Rhythm Oscillator', inline='dro1')
+zigzag_period       = input.int(14, 'Zig-zag period', group='Detrend Rhythm Oscillator', inline='dro2')
+
+// Functions (thanks @StockMarketCycles for initial DRO idea)
+add_to_zigzag(pointer, value, bindex, max_array_size) =>
+    array.unshift(pointer, bindex)
+    array.unshift(pointer, value)
+    if array.size(pointer) > max_array_size
+        array.pop(pointer)
+        array.pop(pointer)
+    0.0  // Adding a dummy float return value
+//
+update_zigzag(pointer, value, bindex, dir, max_array_size) =>
+    if array.size(pointer) == 0
+        add_to_zigzag(pointer, value, bindex, max_array_size)
+        0.0
+    else
+        if dir == 1 and value > array.get(pointer, 0) or dir == -1 and value < array.get(pointer, 0)
+            array.set(pointer, 0, value)
+            array.set(pointer, 1, bindex)
+            0.0
+//
+dynamic_period_length() =>
+
+    var maxZigzagArraySize  = 10
+    var zigzagValues        = array.new_float(0)
+    var zigzagLengths       = array.new_float(0)
+    var direction           = 0
+    var lastPivotPoint      = 0
+    var lastPivotDistance   = 0
+
+    var upZigzags           = array.new_float(0)
+    var downZigzags         = array.new_float(0)
+
+    dpoValue                = 100 * (ta.ema(src, fast_length) - ta.ema(src, slow_length)) / ta.ema(src, slow_length)
+    detrended_data          = detrend_data ? dpoValue : src 
+
+    float highPoints        = ta.highestbars(detrended_data, zigzag_period) == 0 ? detrended_data : na
+    float lowPoints         = ta.lowestbars(detrended_data, zigzag_period) == 0 ? detrended_data : na
+
+    directionIf             = lowPoints and na(highPoints) ? -1 : direction
+    direction               := highPoints and na(lowPoints) ? 1 : directionIf
+
+    directionChanged        = ta.change(direction)
+
+    if highPoints or lowPoints
+        if directionChanged
+            add_to_zigzag(zigzagValues, direction == 1 ? highPoints : lowPoints, bar_index, maxZigzagArraySize)
+            lastPivotDistance := bar_index - lastPivotPoint
+            lastPivotPoint := bar_index
+            if direction == 1
+                array.push(upZigzags, lastPivotDistance)
+                0.
+            if direction == -1
+                array.push(downZigzags, lastPivotDistance)
+                0.
+        else
+            update_zigzag(zigzagValues, direction == 1 ? highPoints : lowPoints, bar_index, direction, maxZigzagArraySize)
+    // Final params
+    avgUpZigzagLength       = array.avg(upZigzags)
+    avgDownZigzagLength     = array.avg(downZigzags)
+    avgZigzagLength         = (avgUpZigzagLength + avgDownZigzagLength) / 2
+    avgZigzagLength
+//
+
+// Calculations 
+bp_length           = dynamic_period_length()
+cycle_length        = int(nz(bp_length, 1)) < 1 ? 1 : int(nz(bp_length, 1))
+length              = length_calc ? cycle_length : length_input
+
+// Define True Range
+tr()                => math.max(high - low, math.abs(high - close[1]), math.abs(low - close[1]))
+// Calculating ATR
+atr(length)         => ta.sma(tr(), length)
+
+// Bollinger Bands
+bollinger_dev       = ta.stdev(src, length) * mult
+bollinger_dev1      = bollinger_dev * mult_step
+bollinger_dev2      = bollinger_dev1 * mult_step
+bollinger_dev3      = bollinger_dev2 * mult_step
+//
+bollinger_basis     = ma.selector(src, length, averageType)
+bollinger_upper     = bollinger_basis + bollinger_dev
+bollinger_upper1    = bollinger_basis + bollinger_dev1
+bollinger_upper2    = bollinger_basis + bollinger_dev2
+bollinger_upper3    = bollinger_basis + bollinger_dev3
+bollinger_lower     = bollinger_basis - bollinger_dev
+bollinger_lower1    = bollinger_basis - bollinger_dev1
+bollinger_lower2    = bollinger_basis - bollinger_dev2
+bollinger_lower3    = bollinger_basis - bollinger_dev3
+
+// Keltner Channels
+rangema             = atr(length)
+keltner_basis       = ma.selector(src, length, averageType)
+keltner_upper       = keltner_basis + rangema * mult
+keltner_upper1      = keltner_basis + rangema * mult_step
+keltner_upper2      = keltner_basis + rangema * mult_step * mult_step
+keltner_upper3      = keltner_basis + rangema * mult_step * mult_step * mult_step
+
+keltner_lower       = keltner_basis - rangema * mult
+keltner_lower1      = keltner_basis - rangema * mult_step
+keltner_lower2      = keltner_basis - rangema * mult_step * mult_step
+keltner_lower3      = keltner_basis - rangema * mult_step * mult_step * mult_step
+
+// Envelope 
+k                   = (10 * mult) / 100.0
+env_basis           = ma.selector(src, length, averageType)
+env_upper           = env_basis * (1 + k)
+env_upper1          = env_basis * (1 + k * mult_step)
+env_upper2          = env_basis * (1 + k * mult_step * mult_step)
+env_upper3          = env_basis * (1 + k * mult_step * mult_step * mult_step)
+env_lower           = env_basis * (1 - k)
+env_lower1          = env_basis * (1 - k * mult_step)
+env_lower2          = env_basis * (1 - k * mult_step * mult_step)
+env_lower3          = env_basis * (1 - k * mult_step * mult_step * mult_step)
+
+// Average True Range Channels
+atr                 = ma.ema(ta.tr(true), length)
+atr_basis           = ma.selector(src, length, averageType)
+atr_upper           = atr_basis + atr
+atr_upper1          = atr_basis + atr * mult_step
+atr_upper2          = atr_basis + atr * mult_step * mult_step
+atr_upper3          = atr_basis + atr * mult_step * mult_step * mult_step
+atr_lower           = atr_basis - atr
+atr_lower1          = atr_basis - atr * mult_step
+atr_lower2          = atr_basis - atr * mult_step * mult_step
+atr_lower3          = atr_basis - atr * mult_step * mult_step * mult_step
+
+// Donchian Channels
+donchian_upper      = ta.highest(length)
+donchian_upper1     = donchian_upper + mult_step
+donchian_upper2     = donchian_upper + mult_step * mult_step
+donchian_upper3     = donchian_upper + mult_step * mult_step * mult_step
+donchian_lower      = ta.lowest(length)
+donchian_lower1     = donchian_lower - mult_step
+donchian_lower2     = donchian_lower - mult_step * mult_step
+donchian_lower3     = donchian_lower - mult_step * mult_step * mult_step
+donchian_basis      = math.avg(donchian_upper, donchian_lower)
+
+// Average Channel
+basis               = (bollinger_basis + keltner_basis + env_basis + atr_basis + donchian_basis) / 5
+upper               = (bollinger_upper + keltner_upper + env_upper + atr_upper) / 4
+upper1              = (bollinger_upper1 + keltner_upper1 + env_upper1 + atr_upper1) / 4
+upper2              = (bollinger_upper2 + keltner_upper2 + env_upper2 + atr_upper2) / 4
+upper3              = (bollinger_upper3 + keltner_upper3 + env_upper3 + atr_upper3) / 4
+lower               = (bollinger_lower + keltner_lower + env_lower + atr_lower) / 4
+lower1              = (bollinger_lower1 + keltner_lower1 + env_lower1 + atr_lower1) / 4
+lower2              = (bollinger_lower2 + keltner_lower2 + env_lower2 + atr_lower2) / 4
+lower3              = (bollinger_lower3 + keltner_lower3 + env_lower3 + atr_lower3) / 4
+
+// Plotting
+fill_color          = color.new(#4d4f53, 85)
+
+// Average Bands
+u1                  = plot(upper, color = na, editable = false)
+u2                  = plot(upper1, color = na, editable = false)
+u3                  = plot(upper2, color = na, editable = false)
+u4                  = plot(upper3, color = na, editable = false)
+l1                  = plot(lower, color = na, editable = false)
+l2                  = plot(lower1, color = na, editable = false)
+l3                  = plot(lower2, color = na, editable = false)
+l4                  = plot(lower3, color = na, editable = false)
+b                   = plot(basis, color = color.white, editable = false)
+
+fill(u1, l1, color = fill_color)
+fill(u2, l2, color = fill_color)
+fill(u3, l3, color = fill_color)
+fill(u4, l4, color = fill_color)
