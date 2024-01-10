@@ -1,0 +1,1607 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © gotbeatz26107
+
+//@version=5
+
+// @description This library is made to expand traders moving average arsenal. 
+library("ma_")
+
+// Simple Moving Average
+export sma(float src, simple int length) =>
+
+    // Input
+    sma = src
+
+    // Calculation
+    for i = 0 to length - 1
+        sma += src[i] / length
+    
+    // Output
+    sma
+//
+export sma(float src, series int length) =>
+
+    // Input
+    sma = src
+
+    // Calculation
+    for i = 0 to length - 1
+        sma += src[i] / length
+    
+    // Output
+    sma
+//
+
+// Ehlers Instantaneous Trendline
+export eit(float src) =>
+
+    // Input
+    ma = src
+    eit_alpha = 0.07
+
+    // Calculation
+    ma := bar_index < 7 ? (src + (2 * nz(src[1])) + nz(src[2])) / 4 : ((0.07 - (math.pow(eit_alpha, 2) / 4)) * src)
+    + (0.5 * math.pow(eit_alpha, 2) * nz(src[1])) - ((eit_alpha - (0.75 * math.pow(eit_alpha, 2))) * nz(src[2]))
+     + (2 * (1 - eit_alpha) * nz(ma[1])) - (math.pow(1 - eit_alpha, 2) * nz(ma[2]))
+
+    // Output
+    ma
+//
+
+// Exponential moving Average
+export ema(float src, simple int length) =>
+
+    // Input
+    ema = src
+
+    // Calculation
+    ema := na(ema[1]) ? src : (src - nz(ema[1])) * (2 / (length + 1)) + nz(ema[1])
+
+    // Output
+    ema
+//
+export ema(float src, series int length) =>
+
+    // Input
+    ema = src
+
+    // Calculation
+    ema := na(ema[1]) ? src : (src - nz(ema[1])) * (2 / (length + 1)) + nz(ema[1])
+
+    // Output
+    ema
+//
+
+// Ahrens Moving Average
+export ahma(float src, simple int length) =>
+
+    // Input
+    ma = src
+
+    // Calculation
+    ma := nz(ma[1]) + (src - (nz(ma[1]) + nz(ma[length])) / 2) / length 
+
+    // Output
+    ma
+//
+export ahma(float src, series int length) =>
+
+    // Input
+    ma = src
+
+    // Calculation
+    ma := nz(ma[1]) + (src - (nz(ma[1]) + nz(ma[length])) / 2) / length 
+
+    // Output
+    ma
+//
+
+// Blackman Filter
+export bmf(float src, simple int length) =>
+
+    // Input
+    ma = src
+    bmf_sum = 0.0
+    bmf_sumw = 0.0
+
+    // Calculation
+    for i = 0 to length - 1
+
+        k = i / length
+        w = 0.42 - 0.5 * math.cos(2 * math.pi * k) + 0.08 * math.cos(4 * math.pi * k)
+        bmf_sumw := bmf_sumw + w
+        bmf_sum := bmf_sum + w*src[i]
+
+    ma := bmf_sum / bmf_sumw
+
+    // Output
+    ma
+//
+export bmf(float src, series int length) =>
+
+    // Input
+    ma = src
+    bmf_sum = 0.0
+    bmf_sumw = 0.0
+
+    // Calculation
+    for i = 0 to length - 1
+
+        k = i / length
+        w = 0.42 - 0.5 * math.cos(2 * math.pi * k) + 0.08 * math.cos(4 * math.pi * k)
+        bmf_sumw := bmf_sumw + w
+        bmf_sum := bmf_sum + w*src[i]
+
+    ma := bmf_sum / bmf_sumw
+
+    // Output
+    ma
+//
+
+// Corrective MA
+export cma(float src, simple int length) =>
+
+    // Input
+    ma     = sma(src, length)
+
+    // Calculation
+
+    v1      = ta.variance(src, length)
+    v2      = math.pow(nz(ma[1], ma) - ma, 2)
+    v3      = v1 == 0 or v2 == 0 ? 1 : v2 / (v1 + v2)
+        
+    var tolerance = math.pow(10, -5)
+    float err   = 1
+        
+    // Gain Factor
+    float kPrev = 1
+    float k     = 1
+        
+    for i = 0 to 5000 by 1
+        if err > tolerance
+            k := v3 * kPrev * (2 - kPrev)
+            err := kPrev - k
+            kPrev := k
+            kPrev
+                
+    ma      := nz(ma[1], src) + k * (ma - nz(ma[1], src))
+
+    // Output
+    ma
+//
+export cma(float src, series int length) =>
+
+    // Input
+    ma     = sma(src, length)
+
+    // Calculation
+
+    v1      = ta.variance(src, length)
+    v2      = math.pow(nz(ma[1], ma) - ma, 2)
+    v3      = v1 == 0 or v2 == 0 ? 1 : v2 / (v1 + v2)
+        
+    var tolerance = math.pow(10, -5)
+    float err   = 1
+        
+    // Gain Factor
+    float kPrev = 1
+    float k     = 1
+        
+    for i = 0 to 5000 by 1
+        if err > tolerance
+            k := v3 * kPrev * (2 - kPrev)
+            err := kPrev - k
+            kPrev := k
+            kPrev
+                
+    ma      := nz(ma[1], src) + k * (ma - nz(ma[1], src))
+
+    // Output
+    ma
+//
+
+// Double Exponential Moving Average
+export dema(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    e1 			= ema(src, length)
+    e2 			= ema(e1, length)
+    ma 			:= 2 * e1 - e2
+
+	// Output
+	ma
+//
+export dema(float src, series int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    e1 			= ema(src, length)
+    e2 			= ema(e1, length)
+    ma 			:= 2 * e1 - e2
+
+	// Output
+	ma
+//
+
+// Damped Sine Wave Weighted Filter
+export dswf(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+    dswf_sum    = 0.0
+    dswf_sumw   = 0.0
+
+	// Calculation
+
+    for i = 1 to length
+        w = math.sin(2.0*math.pi * i / length) / i
+        dswf_sumw := dswf_sumw + w
+        dswf_sum := dswf_sum + w*src[i-1]
+
+    ma := dswf_sum/dswf_sumw
+
+	// Output
+	ma
+//
+export dswf(float src, series int length) =>
+
+	// Input
+	ma 			= src
+    dswf_sum    = 0.0
+    dswf_sumw   = 0.0
+
+	// Calculation
+
+    for i = 1 to length
+        w = math.sin(2.0*math.pi * i / length) / i
+        dswf_sumw := dswf_sumw + w
+        dswf_sum := dswf_sum + w*src[i-1]
+
+    ma := dswf_sum/dswf_sumw
+
+	// Output
+	ma
+//
+
+// Elastic Volume Weighted MA
+export evwma(float src, simple int length, float volume) =>
+
+    // Input
+    ma = src
+    volume_sum = math.sum(volume, length)
+
+    // Calculation
+    ma := ((volume_sum - volume) * nz(ma[1]) + volume * src ) / volume_sum
+
+    // Output
+    ma
+//
+export evwma(float src, series int length, float volume) =>
+
+    // Input
+    ma = src
+    volume_sum = math.sum(volume, length)
+
+    // Calculation
+    ma := ((volume_sum - volume) * nz(ma[1]) + volume * src ) / volume_sum
+
+    // Output
+    ma
+//
+
+// Ehlers Simple Decycler
+export esd(float src, simple int length) =>
+
+    // Input
+    ma = src
+    eit_alpha = 0.07
+
+    // Calculation
+    alphaArg = 2 * math.pi / (length * math.sqrt(2))
+        
+    alpha = 0.0
+    alpha := math.cos(alphaArg) != 0
+         ? (math.cos(alphaArg) + math.sin(alphaArg) - 1) / math.cos(alphaArg)
+         : nz(alpha[1])
+        
+    hp = 0.0
+    hp := math.pow(1 - (alpha / 2), 2) * (src - 2 * nz(src[1]) + nz(src[2])) + 2 * (1 - alpha) * nz(hp[1]) - math.pow(1 - alpha, 2) * nz(hp[2])
+    
+    ma := src - hp
+
+    // Output
+    ma
+//
+export esd(float src, series int length) =>
+
+    // Input
+    ma = src
+    eit_alpha = 0.07
+
+    // Calculation
+    alphaArg = 2 * math.pi / (length * math.sqrt(2))
+        
+    alpha = 0.0
+    alpha := math.cos(alphaArg) != 0
+         ? (math.cos(alphaArg) + math.sin(alphaArg) - 1) / math.cos(alphaArg)
+         : nz(alpha[1])
+        
+    hp = 0.0
+    hp := math.pow(1 - (alpha / 2), 2) * (src - 2 * nz(src[1]) + nz(src[2])) + 2 * (1 - alpha) * nz(hp[1]) - math.pow(1 - alpha, 2) * nz(hp[2])
+    
+    ma := src - hp
+    
+    // Output
+    ma
+//
+
+// Fractal Adaptive MA
+export frama(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    length2     = math.floor(length / 2)
+    hh2         = ta.highest(length2)
+    ll2         = ta.lowest(length2)
+        
+    N1          = (hh2 - ll2) / length2
+    N2          = (hh2[length2] - ll2[length2]) / length2
+    N3          = (ta.highest(length) - ta.lowest(length)) / length 
+    D           = (math.log(N1 + N2) - math.log(N3)) / math.log(2)
+    factor      = math.exp(-4.6 * (D - 1))
+
+    ma          := factor * src + (1 - factor) * nz(ma[1])
+
+	// Output
+	ma
+//
+export frama(float src, series int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    length2     = math.floor(length / 2)
+    hh2         = ta.highest(length2)
+    ll2         = ta.lowest(length2)
+        
+    N1          = (hh2 - ll2) / length2
+    N2          = (hh2[length2] - ll2[length2]) / length2
+    N3          = (ta.highest(length) - ta.lowest(length)) / length 
+    D           = (math.log(N1 + N2) - math.log(N3)) / math.log(2)
+    factor      = math.exp(-4.6 * (D - 1))
+
+    ma          := factor * src + (1 - factor) * nz(ma[1])
+    
+	// Output
+	ma
+//
+
+// Fisher Least Squares MA
+export flsma(float src, simple int len) =>
+    // Input
+    ma = src
+
+    // Calculation
+    e = ta.sma(math.abs(src - nz(ma[1])), len)
+    z = ta.sma(src - nz(ma[1], src), len) / e
+    r = (math.exp(2 * z) - 1) / (math.exp(2 * z) + 1)
+    a = (bar_index - ta.sma(bar_index, len)) / ta.stdev(bar_index, len) * r
+
+    ma := ta.sma(src, len) + a * ta.stdev(src, len)
+
+    // Output
+    ma
+//
+export flsma(float src, series int len) =>
+    // Input
+    ma = src
+
+    // Calculation
+    e = ta.sma(math.abs(src - nz(ma[1])), len)
+    z = ta.sma(src - nz(ma[1], src), len) / e
+    r = (math.exp(2 * z) - 1) / (math.exp(2 * z) + 1)
+    a = (bar_index - ta.sma(bar_index, len)) / ta.stdev(bar_index, len) * r
+    
+    ma := ta.sma(src, len) + a * ta.stdev(src, len)
+
+    // Output
+    ma
+//
+
+// Geometric Mean MA
+export gmma(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    lmean       = math.log(src)
+    smean       = math.sum(lmean, length)
+
+    ma          := math.exp(smean / length)
+	// Output
+	ma
+//
+export gmma(float src, series int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    lmean       = math.log(src)
+    smean       = math.sum(lmean, length)
+
+    ma          := math.exp(smean / length)
+	// Output
+	ma
+//
+
+// Hybrid Convolution Filter
+export hcf(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+    sum         = 0.
+
+	// Calculation
+    for i = 1 to length
+        sgn = .5*(1 - math.cos((i/length)*math.pi))
+        sum := sum + (sgn*(nz(ma[1],src)) + (1 - sgn)*src[i-1]) * ( (.5*(1 - math.cos((i/length)*math.pi))) - (.5*(1 - math.cos(((i-1)/length)*math.pi))))
+
+    ma := sum
+     			
+	// Output
+	ma
+//
+export hcf(float src, series int length) =>
+
+	// Input
+	ma 			= src
+    sum         = 0.
+
+	// Calculation
+    for i = 1 to length
+        sgn = .5*(1 - math.cos((i/length)*math.pi))
+        sum := sum + (sgn*(nz(ma[1],src)) + (1 - sgn)*src[i-1]) * ( (.5*(1 - math.cos((i/length)*math.pi))) - (.5*(1 - math.cos(((i-1)/length)*math.pi))))
+
+    ma := sum
+     			
+	// Output
+	ma
+//
+
+// Double Exponential Moving Average
+export hma(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    ma 			:= ta.wma(2 * ta.wma(src, length / 2) - ta.wma(src, length), math.round(math.sqrt(length)))
+
+	// Output
+	ma
+//
+export hma(float src, series int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    ma 			:= ta.wma(2 * ta.wma(src, length / 2) - ta.wma(src, length), math.round(math.sqrt(length)))
+
+	// Output
+	ma
+//
+
+// Jurik Moving Average
+export jma(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+    tmp0 		= 0.0
+    tmp1 		= 0.0
+    tmp2 		= 0.0
+    tmp3 		= 0.0
+    tmp4 		= 0.0
+
+	// Calculation
+	beta 		= 0.45 * (length - 1) / (0.45 * (length - 1) + 2)
+    alpha 		= beta
+
+    tmp0 		:= (1 - alpha) * src + alpha * nz(tmp0[1])
+    tmp1 		:= (src - tmp0[0]) * (1 - beta) + beta * nz(tmp1[1])
+    tmp2 		:= tmp0[0] + tmp1[0]
+    tmp3 		:= (tmp2[0] - nz(tmp4[1])) * (1 - alpha) * (1 - alpha) + alpha * alpha * nz(tmp3[1])
+    tmp4 		:= nz(tmp4[1]) + tmp3[0]
+    ma 			:= tmp4
+
+	// Ouput
+    ma
+//
+export jma(float src, series int length) =>
+
+	// Input
+	ma 			= src
+    tmp0 		= 0.0
+    tmp1 		= 0.0
+    tmp2 		= 0.0
+    tmp3 		= 0.0
+    tmp4 		= 0.0
+
+	// Calculation
+	beta 		= 0.45 * (length - 1) / (0.45 * (length - 1) + 2)
+    alpha 		= beta
+
+    tmp0 		:= (1 - alpha) * src + alpha * nz(tmp0[1])
+    tmp1 		:= (src - tmp0[0]) * (1 - beta) + beta * nz(tmp1[1])
+    tmp2 		:= tmp0[0] + tmp1[0]
+    tmp3 		:= (tmp2[0] - nz(tmp4[1])) * (1 - alpha) * (1 - alpha) + alpha * alpha * nz(tmp3[1])
+    tmp4 		:= nz(tmp4[1]) + tmp3[0]
+    ma 			:= tmp4
+
+	// Ouput
+    ma
+//
+
+// Kaufman's Adaptive Moving Average
+export kama(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+    fastAlpha 	= 3
+    fastAlpha_	= 2.0 / (fastAlpha + 1)
+    slowAlpha 	= 2.0 / 31
+
+	// Calculation
+    momentum 	= math.abs(ta.change(src, length))
+    volatility 	= math.sum(math.abs(ta.change(src)), length)
+    ratio 		= volatility != 0 ? momentum / volatility : 0
+    smoothing 	= math.pow(ratio * (fastAlpha_ - slowAlpha) + slowAlpha, 2)
+    ma 			:= nz(ma[1], src) + smoothing * (src - nz(ma[1], src))
+
+	// Output
+    ma	
+//
+export kama(float src, series int length) =>
+
+	// Input
+	ma 			= src
+    fastAlpha 	= 3
+    fastAlpha_	= 2.0 / (fastAlpha + 1)
+    slowAlpha 	= 2.0 / 31
+
+	// Calculation
+    momentum 	= math.abs(ta.change(src, length))
+    volatility 	= math.sum(math.abs(ta.change(src)), length)
+    ratio 		= volatility != 0 ? momentum / volatility : 0
+    smoothing 	= math.pow(ratio * (fastAlpha_ - slowAlpha) + slowAlpha, 2)
+    ma 			:= nz(ma[1], src) + smoothing * (src - nz(ma[1], src))
+
+	// Output
+    ma	
+//
+
+// Kijun-sen
+export kijun(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+
+
+	// Calculation
+    ma 			:= math.avg(ta.lowest(length), ta.highest(length))
+
+	// Output
+    ma	
+//
+export kijun(float src, series int length) =>
+
+	// Input
+	ma 			= src
+
+
+	// Calculation
+    ma 			:= math.avg(ta.lowest(length), ta.highest(length))
+
+	// Output
+    ma	
+//
+
+// Least Squares MA
+export lsma(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+
+    // Calculation
+    ma 			:= ta.linreg(src, length, 0)
+
+	// Output
+    ma	
+//
+export lsma(float src, series int length) =>
+
+	// Input
+	ma 			= src
+
+    // Calculation
+    ma 			:= ta.linreg(src, length, 0)
+
+	// Output
+    ma	
+//
+
+// Leo MA
+export lma(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+
+    // Calculation
+    ma 			:= 2 * ta.wma(src, length) - ta.sma(src, length)
+
+	// Output
+    ma	
+//
+export lma(float src, series int length) =>
+
+	// Input
+	ma 			= src
+
+    // Calculation
+    ma 			:= 2 * ta.wma(src, length) - ta.sma(src, length)
+
+	// Output
+    ma	
+//
+
+// McGinley Dynamic
+export md(float src, simple int length) =>
+
+	// Input
+	ma 			= 0.0
+    // Calculation
+    ma 			:= na(ma[1]) ? ema(src, length) : ma[1] + (src - ma[1]) / (length * math.pow(src / ma[1], 4))
+
+	// Output
+    ma	
+//
+export md(float src, series int length) =>
+
+	// Input
+	ma 			= 0.0
+    // Calculation
+    ma 			:= na(ma[1]) ? ema(src, length) : ma[1] + (src - ma[1]) / (length * math.pow(src / ma[1], 4))
+
+	// Output
+    ma	
+//
+
+// Modular Filter
+export mf(float src, simple int length) =>
+
+	// Input
+	ma 			= 0.0
+    b = 0.0 
+    c = 0.0 
+    os = 0.0
+    ts = 0.0
+
+    // Calculation
+    alpha = 2 / (length + 1)
+    a = src
+
+    b := a > alpha * a + (1 - alpha) * nz(b[1], a) ? a : alpha * a + (1 - alpha) * nz(b[1], a)
+    c := a < alpha * a + (1 - alpha) * nz(c[1], a) ? a : alpha * a + (1 - alpha) * nz(c[1], a)
+    os := a == b ? 1 : a == c ? 0 : os[1]
+
+    upper = 0.8 * b + (1 - 0.8) * c
+    lower = 0.8 * c + (1 - 0.8) * b 
+
+    ma := os*upper+(1-os)*lower
+
+	// Output
+    ma	
+//
+export mf(float src, series int length) =>
+
+	// Input
+	ma 			= 0.0
+    b = 0.0 
+    c = 0.0 
+    os = 0.0
+    ts = 0.0
+
+    // Calculation
+    alpha = 2 / (length + 1)
+    a = src
+
+    b := a > alpha * a + (1 - alpha) * nz(b[1], a) ? a : alpha * a + (1 - alpha) * nz(b[1], a)
+    c := a < alpha * a + (1 - alpha) * nz(c[1], a) ? a : alpha * a + (1 - alpha) * nz(c[1], a)
+    os := a == b ? 1 : a == c ? 0 : os[1]
+
+    upper = 0.8 * b + (1 - 0.8) * c
+    lower = 0.8 * c + (1 - 0.8) * b 
+
+    ma := os*upper+(1-os)*lower
+
+	// Output
+    ma	
+//
+
+// Moving Median
+export mm(float src, simple int length) =>
+
+	// Input
+	ma 			= 0.0
+    // Calculation
+    ma 			:= ta.percentile_nearest_rank(src, length, 50)
+
+	// Output
+    ma	
+//
+export mm(float src, series int length) =>
+
+	// Input
+	ma 			= 0.0
+    // Calculation
+    ma 			:= ta.percentile_nearest_rank(src, length, 50)
+
+	// Output
+    ma	
+//
+
+// The Smoothed Moving Average
+export smma(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    smaval 		= sma(src, length)
+    ma 			:= na(ma[1]) ? smaval : (ma[1] * (length - 1) + src) / length
+
+	// Output
+	ma
+//
+export smma(float src, series int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    smaval 		= sma(src, length)
+    ma 			:= na(ma[1]) ? smaval : (ma[1] * (length - 1) + src) / length
+
+	// Output
+	ma
+//
+
+// Shapeshifting MA
+export ssma(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+    ssma_smooth = false
+    ssma_pow    = 4.0
+
+	// Calculation
+    ssma_sum    = 0.0
+    ssma_sumw   = 0.0
+    alpha       = ssma_smooth ? 2 : 1
+    power       = ssma_smooth ? ssma_pow - ssma_pow % 2 : ssma_pow
+
+    for i = 0 to length - 1
+
+        x = i / (length - 1)
+        n = ssma_smooth ? -1 + x * 2 : x
+        w = 1 - 2 * math.pow(n,alpha)/(math.pow(n,power) + 1) 
+        ssma_sumw := ssma_sumw + w
+        ssma_sum := ssma_sum + src[i] * w
+
+    ma 			:= ssma_sum/ssma_sumw
+
+	// Output
+	ma
+//
+export ssma(float src, series int length) =>
+
+	// Input
+	ma 			= src
+    ssma_smooth = false
+    ssma_pow    = 4.0
+
+	// Calculation
+    ssma_sum    = 0.0
+    ssma_sumw   = 0.0
+    alpha       = ssma_smooth ? 2 : 1
+    power       = ssma_smooth ? ssma_pow - ssma_pow % 2 : ssma_pow
+
+    for i = 0 to length - 1
+
+        x = i / (length - 1)
+        n = ssma_smooth ? -1 + x * 2 : x
+        w = 1 - 2 * math.pow(n,alpha)/(math.pow(n,power) + 1) 
+        ssma_sumw := ssma_sumw + w
+        ssma_sum := ssma_sum + src[i] * w
+
+    ma 			:= ssma_sum/ssma_sumw
+
+	// Output
+	ma
+//
+
+// Sine Weighted MA
+export swma(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+    sum = 0.0
+    sum_weight = 0.0
+
+	// Calculation
+    for i = 0 to length - 1
+        weight = math.sin(i * math.pi / (length + 1))
+        sum := sum + nz(src[i]) * weight
+        sum_weight := sum_weight + weight
+
+    ma := sum / sum_weight
+
+	// Output
+	ma
+//
+export swma(float src, series int length) =>
+
+	// Input
+	ma 			= src
+    sum = 0.0
+    sum_weight = 0.0
+
+	// Calculation
+    for i = 0 to length - 1
+        weight = math.sin(i * math.pi / (length + 1))
+        sum := sum + nz(src[i]) * weight
+        sum_weight := sum_weight + weight
+
+    ma := sum / sum_weight
+
+	// Output
+	ma
+//
+
+// Triangular Moving Average
+export tma(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+	// Calculation
+	ma 			:= sma(ta.sma(src, math.ceil(length / 2)), math.floor(length / 2) + 1)
+
+	// Output
+	ma
+//
+export tma(float src, series int length) =>
+
+	// Input
+	ma 			= src
+	// Calculation
+	ma 			:= sma(sma(src, math.ceil(length / 2)), math.floor(length / 2) + 1)
+
+	// Output
+	ma
+//
+
+// Triple Exponential MA
+export tema(float src, simple int length) =>
+
+	// Input
+    e = ema(src, length)
+	ma 			= src
+	// Calculation
+	ma 			:= 3 * (e - ema(e, length)) + ema(ema(e, length), length)
+
+	// Output
+	ma
+//
+export tema(float src, series int length) =>
+
+	// Input
+    e = ema(src, length)
+	ma 			= src
+	// Calculation
+	ma 			:= 3 * (e - ema(e, length)) + ema(ema(e, length), length)
+
+	// Output
+	ma
+//
+
+// True Strength Force 
+export tsf(float src, simple int length) =>
+
+	// Input
+	ma = src
+
+	// Calculation
+    lrc 		= ta.linreg(src, length, 0)
+    lrc1 		= ta.linreg(src, length, 1)
+    lrs 		= lrc - lrc1
+    ma 			:= ta.linreg(src, length, 0) + lrs
+
+	// Output
+	ma
+//
+export tsf(float src, series int length) =>
+
+	// Input
+	ma = src
+
+	// Calculation
+    lrc 		= ta.linreg(src, length, 0)
+    lrc1 		= ta.linreg(src, length, 1)
+    lrs 		= lrc - lrc1
+    ma 			:= ta.linreg(src, length, 0) + lrs
+
+	// Output
+	ma
+//
+
+// Vector Autoregression MA
+export varma(float src, simple int length) =>
+
+	// Input
+	ma = src
+
+	// Calculation
+    valpha  = 2 / (length + 1)
+    vud1    = (src > src[1]) ? (src - src[1]) : 0
+    vdd1    = (src < src[1]) ? (src[1] - src) : 0
+    vUD     = math.sum(vud1, 9)
+    vDD     = math.sum(vdd1, 9)
+    vCMO    = nz( (vUD - vDD) / (vUD + vDD) )
+    ma      := nz(valpha * math.abs(vCMO) * src) + (1 - valpha * math.abs(vCMO)) * nz(ma[1])
+
+	// Output
+	ma
+//
+export varma(float src, series int length) =>
+
+	// Input
+	ma = src
+
+	// Calculation
+    valpha  = 2 / (length + 1)
+    vud1    = (src > src[1]) ? (src - src[1]) : 0
+    vdd1    = (src < src[1]) ? (src[1] - src) : 0
+    vUD     = math.sum(vud1, 9)
+    vDD     = math.sum(vdd1, 9)
+    vCMO    = nz( (vUD - vDD) / (vUD + vDD) )
+    ma      := nz(valpha * math.abs(vCMO) * src) + (1 - valpha * math.abs(vCMO)) * nz(ma[1])
+
+	// Output
+	ma
+//
+
+// Volume Adjusted Moving Average
+export vama(float src, simple int length) =>
+
+	// Input	
+	ma 			= src
+    lookback 	= 12
+
+	// Calculation
+    mid 		= ema(src, length)
+    dev 		= src - mid
+    volUp 		= ta.highest(dev, lookback)
+    volDown 	= ta.lowest(dev, lookback)
+    ma 			:= mid + math.avg(volUp, volDown)
+
+	// Output
+	ma
+//
+export vama(float src, series int length) =>
+
+	// Input	
+	ma 			= src
+    lookback 	= 12
+
+	// Calculation
+    mid 		= ema(src, length)
+    dev 		= src - mid
+    volUp 		= ta.highest(dev, lookback)
+    volDown 	= ta.lowest(dev, lookback)
+    ma 			:= mid + math.avg(volUp, volDown)
+
+	// Output
+	ma
+//
+
+// Volume Moving Average (Not applicable for price data)
+export vma(float src, simple int length) =>
+
+	// Input	
+	ma 			= src
+
+	// Calculation
+    valpha 		= 2 / (length + 1)
+    vud1 		= src > src[1] ? src - src[1] : 0
+    vdd1 		= src < src[1] ? src[1] - src : 0
+    vUD 		= math.sum(vud1, 9)
+    vDD 		= math.sum(vdd1, 9)
+    vCMO 		= nz((vUD - vDD) / (vUD + vDD))
+    ma 			:= nz(valpha * math.abs(vCMO) * src) + (1 - valpha * math.abs(vCMO)) * nz(ma[1])
+
+	// Output
+	ma
+//
+export vma(float src, series int length) =>
+
+	// Input	
+	ma 			= src
+
+	// Calculation
+    valpha 		= 2 / (length + 1)
+    vud1 		= src > src[1] ? src - src[1] : 0
+    vdd1 		= src < src[1] ? src[1] - src : 0
+    vUD 		= math.sum(vud1, 9)
+    vDD 		= math.sum(vdd1, 9)
+    vCMO 		= nz((vUD - vDD) / (vUD + vDD))
+    ma 			:= nz(valpha * math.abs(vCMO) * src) + (1 - valpha * math.abs(vCMO)) * nz(ma[1])
+
+	// Output
+	ma
+//
+
+// Variable MA
+export vbma(float src, simple int length) =>
+
+	// Input	
+	ma 			= src
+
+	// Calculation
+    k           = 1.0 / length
+    pdm         = math.max((src - src[1]), 0)
+    mdm         = math.max((src[1] - src), 0)
+        
+    pdmS        = float(0.0)
+    mdmS        = float(0.0)
+    pdmS        := ((1 - k)*nz(pdmS[1]) + k*pdm)
+    mdmS        := ((1 - k)*nz(mdmS[1]) + k*mdm)
+        
+    s           = pdmS + mdmS
+    pdi         = pdmS/s
+    mdi         = mdmS/s
+        
+    pdiS        = float(0.0)
+    mdiS        = float(0.0)
+    pdiS        := ((1 - k)*nz(pdiS[1]) + k*pdi)
+    mdiS        := ((1 - k)*nz(mdiS[1]) + k*mdi)
+        
+    d           = math.abs(pdiS - mdiS)
+    s1          = pdiS + mdiS
+        
+    iS          = float(0.0)
+    iS          := ((1 - k)*nz(iS[1]) + k*d/s1)
+        
+    hhv         = ta.highest(iS, length) 
+    llv         = ta.lowest(iS, length) 
+    d1          = hhv - llv
+    vI          = (iS - llv)/d1
+
+    ma          := (1 - k * vI) *nz(ma[1]) + k * vI * src
+
+	// Output
+	ma
+//
+export vbma(float src, series int length) =>
+
+	// Input	
+	ma 			= src
+
+	// Calculation
+    k           = 1.0 / length
+    pdm         = math.max((src - src[1]), 0)
+    mdm         = math.max((src[1] - src), 0)
+        
+    pdmS        = float(0.0)
+    mdmS        = float(0.0)
+    pdmS        := ((1 - k)*nz(pdmS[1]) + k*pdm)
+    mdmS        := ((1 - k)*nz(mdmS[1]) + k*mdm)
+        
+    s           = pdmS + mdmS
+    pdi         = pdmS/s
+    mdi         = mdmS/s
+        
+    pdiS        = float(0.0)
+    mdiS        = float(0.0)
+    pdiS        := ((1 - k)*nz(pdiS[1]) + k*pdi)
+    mdiS        := ((1 - k)*nz(mdiS[1]) + k*mdi)
+        
+    d           = math.abs(pdiS - mdiS)
+    s1          = pdiS + mdiS
+        
+    iS          = float(0.0)
+    iS          := ((1 - k)*nz(iS[1]) + k*d/s1)
+        
+    hhv         = ta.highest(iS, length) 
+    llv         = ta.lowest(iS, length) 
+    d1          = hhv - llv
+    vI          = (iS - llv)/d1
+
+    ma          := (1 - k * vI) *nz(ma[1]) + k * vI * src
+
+	// Output
+	ma
+//
+
+// Variable Index Dynamic Average
+export vida(float src, simple int length) =>
+
+	// Input	
+	ma 			= src
+
+	// Calculation
+    mom         = ta.change(src)
+    upSum       = math.sum(math.max(mom, 0), length)
+    downSum     = math.sum(-math.min(mom, 0), length)
+    out         = (upSum - downSum) / (upSum + downSum)
+    cmo         = math.abs(out)
+    alpha       = 2 / (length + 1)
+        
+    ma          := src * alpha * cmo + nz(ma[1]) * (1 - alpha * cmo)
+
+	// Output
+	ma
+//
+export vida(float src, series int length) =>
+
+	// Input	
+	ma 			= src
+
+	// Calculation
+    mom         = ta.change(src)
+    upSum       = math.sum(math.max(mom, 0), length)
+    downSum     = math.sum(-math.min(mom, 0), length)
+    out         = (upSum - downSum) / (upSum + downSum)
+    cmo         = math.abs(out)
+    alpha       = 2 / (length + 1)
+        
+    ma          := src * alpha * cmo + nz(ma[1]) * (1 - alpha * cmo)
+
+	// Output
+	ma
+//
+
+// Quick MA
+export qma(float src, simple int length) =>
+
+	// Input	
+	ma 			= src
+    peak        = length / 3
+    num         = 0.0
+    denom       = 0.0
+
+	// Calculation
+    for i = 1 to length + 1
+        mult = 0.0
+        if i <= peak
+            mult := i / peak
+        else
+            mult := (length + 1 - i) / (length + 1 - peak)
+        num := num + src[i - 1] * mult
+        denom := denom + mult
+   
+    ma          := (denom != 0.0) ? (num / denom) : src
+
+	// Output
+	ma
+//
+export qma(float src, series int length) =>
+
+	// Input	
+	ma 			= src
+    peak        = length / 3
+    num         = 0.0
+    denom       = 0.0
+
+	// Calculation
+    for i = 1 to length + 1
+        mult = 0.0
+        if i <= peak
+            mult := i / peak
+        else
+            mult := (length + 1 - i) / (length + 1 - peak)
+        num := num + src[i - 1] * mult
+        denom := denom + mult
+   
+    ma          := (denom != 0.0) ? (num / denom) : src
+
+	// Output
+	ma
+//
+
+// Repulsion MA 
+export rpma(float src, simple int len) =>
+    // Input
+    ma = src
+
+    // Calculation
+    ma := ta.sma(close, len * 3) + ta.sma(close, len * 2) - ta.sma(close, len)
+
+    // Output
+    ma
+//
+export rpma(float src, series int len) =>
+    // Input
+    ma = src
+
+    // Calculation
+    ma := ta.sma(close, len * 3) + ta.sma(close, len * 2) - ta.sma(close, len)
+
+    // Output
+    ma
+//
+
+
+// Right Sided Ricker MA
+export rsrma(float src, simple int length) =>
+
+	// Input	
+	ma 			= src
+    rsrma_sum   = 0.0
+    rsrma_sumw  = 0.0
+    rsrma_pw    = 60.0
+    rsrma_width = rsrma_pw / 100 * length
+
+	// Calculation
+    for i = 0 to length - 1
+        w = (1 - math.pow(i/rsrma_width,2))*math.exp(-(i*i/(2*math.pow(rsrma_width,2))))
+        rsrma_sumw := rsrma_sumw + w
+        rsrma_sum := rsrma_sum + src[i] * w
+
+    ma := rsrma_sum/rsrma_sumw
+
+	// Output
+	ma
+//
+export rsrma(float src, series int length) =>
+
+	// Input	
+	ma 			= src
+    rsrma_sum   = 0.0
+    rsrma_sumw  = 0.0
+    rsrma_pw    = 60.0
+    rsrma_width = rsrma_pw / 100 * length
+
+	// Calculation
+    for i = 0 to length - 1
+        w = (1 - math.pow(i/rsrma_width,2))*math.exp(-(i*i/(2*math.pow(rsrma_width,2))))
+        rsrma_sumw := rsrma_sumw + w
+        rsrma_sum := rsrma_sum + src[i] * w
+
+    ma := rsrma_sum/rsrma_sumw
+
+	// Output
+	ma
+//
+
+// Zero Lag Exponential Moving Average 
+export zlema(float src, simple int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    linreg 		= ta.linreg(src, length, 0)
+    linregZ 	= ta.linreg(src, length, 1)
+    lrs 		= linreg - linregZ
+    ma 			:= ta.linreg(src, length, 0) + lrs
+
+	// Output
+	ma
+//
+export zlema(float src, series int length) =>
+
+	// Input
+	ma 			= src
+
+	// Calculation
+    linreg 		= ta.linreg(src, length, 0)
+    linregZ 	= ta.linreg(src, length, 1)
+    lrs 		= linreg - linregZ
+    ma 			:= ta.linreg(src, length, 0) + lrs
+
+	// Output
+	ma
+//
+
+// @function This function gives trader an instrument to test different kinds of moving averages on their strategy.
+// @returns user selected moving average
+export selector(float src, simple int length, string selectMA) =>
+
+    // MA selection
+    ma 			= src
+
+    if selectMA == 'SMA'
+        ma 	:= ta.sma(src, length)
+
+    else if selectMA == 'EMA'
+        ma := ema(src, length)
+
+    else if selectMA == 'EIT'
+        ma := eit(src)
+
+	else if selectMA == 'ALMA'
+        ma := ta.alma(src, length, 0.85, 6)
+
+    else if selectMA == 'AHMA'
+        ma := ahma(src, length)
+
+    else if selectMA == 'BMF'
+        ma := bmf(src, length)
+
+    else if selectMA == 'CMA'
+        ma := cma(src, length)
+
+	else if selectMA == 'DEMA'
+		ma := dema(src, length)
+
+    else if selectMA == 'DSWF'
+        ma := dswf(src, length)
+
+    else if selectMA == 'ESD'
+        ma := esd(src, length)
+
+    else if selectMA == 'FRAMA'
+        ma := frama(src, length)
+
+    else if selectMA == 'FLSMA'
+        ma := flsma(src, length)
+
+    else if selectMA == 'GMMA'
+        ma := gmma(src, length)
+
+    else if selectMA == 'HCF'
+        ma := hcf(src, length)
+
+    else if selectMA == 'HMA'
+        ma := ta.hma(src, length)
+
+    else if selectMA == 'JMA'
+        ma := jma(src, length)
+
+    else if selectMA == 'KAMA'
+        ma := kama(src, length)
+
+    else if selectMA == 'KIJUN'
+        ma := kijun(src, length)
+
+    else if selectMA == 'LSMA'
+        ma := lsma(src, length)
+
+    else if selectMA == 'LMA'
+        ma := lma(src, length)
+
+    else if selectMA == 'MD'
+        ma := md(src, length)
+
+    else if selectMA == 'MF'
+        ma := mf(src, length)
+
+    else if selectMA == 'MM'
+        ma := mm(src, length)
+
+    else if selectMA == 'SMMA'
+        ma := smma(src, length)
+
+    else if selectMA == 'SSMA'
+        ma := ssma(src, length)
+
+    else if selectMA == 'SWMA'
+        ma := swma(src, length)
+
+    else if selectMA == 'TMA'
+        ma := tma(src, length)
+
+    else if selectMA == 'TEMA'
+        ma := tema(src, length)
+
+    else if selectMA == 'TSF'
+        ma := tsf(src, length)
+
+    else if selectMA == 'VAR'
+        ma := varma(src, length)
+
+    else if selectMA == 'VAMA'
+        ma := vama(src, length)
+
+    else if selectMA == 'VBMA'
+		ma := vbma(src, length)
+
+    else if selectMA == 'VIDA'
+		ma := vida(src, length)
+
+    else if selectMA == 'VMA'
+        ma := vma(src, length)
+
+    else if selectMA == 'VAMA'
+		ma := vama(src, length)
+
+    else if selectMA == 'VWMA'
+        ma := ta.vwma(src, length)
+
+    else if selectMA == 'WMA'
+        ma := ta.wma(src, length)
+
+    else if selectMA == 'QMA'
+		ma := qma(src, length)
+
+    else if selectMA == 'RPMA'
+		ma := rpma(src, length)
+
+    else if selectMA == 'RSRMA'
+		ma := rsrma(src, length)
+
+    else if selectMA == 'ZLEMA'
+		ma := zlema(src, length)
+
+	// Output
+    ma
+//
+export selector(float src, series int length, string selectMA) =>
+
+    // MA selection
+    ma 			= src
+
+    if selectMA == 'SMA'
+        ma 	:= sma(src, length)
+
+    else if selectMA == 'EMA'
+        ma := ema(src, length)
+
+    else if selectMA == 'EIT'
+        ma := eit(src)
+
+	else if selectMA == 'ALMA'
+        ma := ta.alma(src, length, 0.85, 6)
+
+    else if selectMA == 'AHMA'
+        ma := ahma(src, length)
+
+    else if selectMA == 'BMF'
+        ma := bmf(src, length)
+
+    else if selectMA == 'CMA'
+        ma := cma(src, length)
+
+	else if selectMA == 'DEMA'
+		ma := dema(src, length)
+
+    else if selectMA == 'DSWF'
+        ma := dswf(src, length)
+
+    else if selectMA == 'ESD'
+        ma := esd(src, length)
+
+    else if selectMA == 'FRAMA'
+        ma := frama(src, length)
+
+    else if selectMA == 'FLSMA'
+        ma := flsma(src, length)
+
+    else if selectMA == 'GMMA'
+        ma := gmma(src, length)
+
+    else if selectMA == 'HCF'
+        ma := hcf(src, length)
+
+    // else if selectMA == 'HMA'
+    //     ma := ta.hma(src, length)
+
+    else if selectMA == 'JMA'
+        ma := jma(src, length)
+
+    else if selectMA == 'KAMA'
+        ma := kama(src, length)
+
+    else if selectMA == 'KIJUN'
+        ma := kijun(src, length)
+
+    else if selectMA == 'LSMA'
+        ma := lsma(src, length)
+
+    else if selectMA == 'LMA'
+        ma := lma(src, length)
+
+    else if selectMA == 'MD'
+        ma := md(src, length)
+
+    else if selectMA == 'MF'
+        ma := mf(src, length)
+
+    else if selectMA == 'MM'
+        ma := mm(src, length)
+
+    else if selectMA == 'SMMA'
+        ma := smma(src, length)
+
+    else if selectMA == 'SSMA'
+        ma := ssma(src, length)
+
+    else if selectMA == 'SWMA'
+        ma := swma(src, length)
+
+    else if selectMA == 'TMA'
+        ma := tma(src, length)
+
+    else if selectMA == 'TEMA'
+        ma := tema(src, length)
+
+    else if selectMA == 'TSF'
+        ma := tsf(src, length)
+
+    else if selectMA == 'VAR'
+        ma := varma(src, length)
+
+    else if selectMA == 'VAMA'
+        ma := vama(src, length)
+
+    else if selectMA == 'VBMA'
+		ma := vbma(src, length)
+
+    else if selectMA == 'VIDA'
+		ma := vida(src, length)
+
+    else if selectMA == 'VMA'
+        ma := vma(src, length)
+
+    else if selectMA == 'VAMA'
+		ma := vama(src, length)
+
+    else if selectMA == 'VWMA'
+        ma := ta.vwma(src, length)
+
+    else if selectMA == 'WMA'
+        ma := ta.wma(src, length)
+
+    else if selectMA == 'QMA'
+		ma := qma(src, length)
+
+    else if selectMA == 'RPMA'
+		ma := rpma(src, length)
+
+    else if selectMA == 'RSRMA'
+		ma := rsrma(src, length)
+
+    else if selectMA == 'ZLEMA'
+		ma := zlema(src, length)
+
+	// Output
+    ma
+//
+
+selectMA 		= input.string("VWMA", options = ['SMA', 'EMA', 'ALMA', 'AHMA', 'BMF', 'DEMA', 'DSWF'
+     									, 'EVWMA', 'ESD', 'FRAMA', 'FLSMA', 'GMMA', 'HCF', 'HMA', 'JMA', 'KAMA', 'KIJUN'
+    			 						, 'LSMA', 'LMA', 'MD', 'MF', 'MM', 'SMMA', 'SSMA', 'SWMA', 'TEMA', 'TSF'
+									 	, 'VAR', 'VAMA', 'VMA', 'VBMA', 'VIDA', 'VWMA', 'WMA', 'QMA', 'RPMA'
+                                         , 'RSRMA', 'ZLEMA'], title = "General", group = 'Moving Averages')
+sma = selector(close, 30, 'SMA')
+ema = selector(close, 30, 'EMA')
+vwma = selector(close, 30, 'VWMA')
+jma = selector(close, 30, 'JMA')
+selector = selector(close, 30, selectMA)
+
+plot(sma, color = color.green)
+plot(ema, color = color.teal)
+plot(vwma, color = color.lime)
+plot(jma, color = color.olive)
+
+plot(selector, color = color.red)
