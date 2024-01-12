@@ -1,0 +1,56 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © gotbeatz26107
+
+//@version=5
+indicator("Oscillator Profile Indicator", shorttitle="OPI", overlay=false)
+
+// Input fields
+src         = input(close, title = "Source", inline = 'l1')
+show_colors = input.bool(true, title = "Show colors?", inline = 'l1') 
+percentile  = input(70, title = "Value Area Percentile", inline = 'l2')
+lookback    = input(100, title = "Lookback period", inline = 'l2') 
+
+// Profiler function
+profiler(float src, simple float percentile, int lookback) =>
+
+    poc_val = 0.0
+    lower_boundary_val = 0.0
+    upper_boundary_val = 0.0
+    if lookback <= 100
+        poc_val := ta.percentile_linear_interpolation(src, lookback, 50)
+        lower_boundary_val := ta.percentile_linear_interpolation(src, lookback, 100 - percentile)
+        upper_boundary_val := ta.percentile_linear_interpolation(src, lookback, percentile)        
+    [poc_val, lower_boundary_val, upper_boundary_val]
+    if lookback > 100
+        poc_val := ta.percentile_nearest_rank(src, lookback, 50)
+        lower_boundary_val := ta.percentile_nearest_rank(src, lookback, 100 - percentile)
+        upper_boundary_val := ta.percentile_nearest_rank(src, lookback, percentile)
+    //
+    [poc_val, lower_boundary_val, upper_boundary_val]
+
+// Extract values from the profiler
+[poc_val, lower_boundary_val, upper_boundary_val] = profiler(src, percentile, lookback)
+
+// Colors and their conditions
+fill_up     = color.rgb(0, 137, 123, 80)
+fill_dn     = color.rgb(255, 82, 82, 80)
+sig_up      = color.rgb(0, 137, 123, 60)
+sig_dn      = color.rgb(255, 82, 82, 60)
+line_up     = color.teal
+line_dn     = color.red
+line_up_clr = src > poc_val ? line_up : line_dn
+line_dn_clr = src < poc_val ? line_dn : line_up
+fill_up_clr = src > poc_val ? fill_up : na
+fill_dn_clr = src < poc_val ? fill_dn : na
+fill_up_sig = src >= upper_boundary_val and poc_val >= poc_val[1] ? sig_up : na
+fill_dn_sig = src <= lower_boundary_val and poc_val <= poc_val[1] ? sig_dn : na
+
+// Plots and fills
+poc         = plot(poc_val, color= show_colors ? color.white : color.red, linewidth = 1)
+dn          = plot(lower_boundary_val, color = show_colors ? line_dn_clr : color.blue, linewidth = 1)
+up          = plot(upper_boundary_val, color = show_colors ? line_up_clr : color.blue, linewidth = 1)
+
+fill(dn, up, color = show_colors ? fill_up_clr : na)
+fill(dn, up, color = show_colors ? fill_dn_clr : na)
+fill(dn, up, color = show_colors ? fill_up_sig : na)
+fill(dn, up, color = show_colors ? fill_dn_sig : na)
