@@ -1,0 +1,77 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © gotbeatz26107
+
+//@version=5
+indicator("Central Banks Balance Sheets ROI% Change", shorttitle = 'CBBS ROI% Change', overlay=false, precision = 2)
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                              General Parameters                                                    //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+period          = input(12, 'ROI Period', group = 'General Settings')
+chart_offset    = input(0, 'Chart Offset', group = 'General Settings')
+
+// Input
+fed_active      = input(true, title = "Federal Reserve System (FED)", group = 'Central Banks')
+pbc_active      = input(true, title = "People's Bank of China (PBoC)", group = 'Central Banks')
+ecb_active      = input(true, title = "European Central Bank (ECB)", group = 'Central Banks')
+boj_active      = input(true, title = "Bank of Japan (BoJ)", group = 'Central Banks')
+rbi_active      = input(true, title = "Reserve Bank of India (RBI)", group = 'Central Banks')
+boe_active      = input(true, title = "BOE (Bank of England)", group = 'Central Banks')
+cbr_active      = input(true, title = "Central Bank of Russia (CBR)", group = 'Central Banks')
+boc_active      = input(true, title = "Bank of Canada (BoC)", group = 'Central Banks')
+bcb_active      = input(true, title = "Central Bank of Brazil (BCB)", group = 'Central Banks')
+rba_active      = input(true, title = "Reserve Bank of Australia (RBA)", group = 'Central Banks')
+bok_active      = input(true, title = "Bank of Korea (BoK)", group = 'Central Banks')
+//
+m2_switch       = input(false, title = "Show US M2 Instead", group = 'M2 Switch')
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                            Calculations                                                            //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// US Balance Sheet
+us              = nz(fed_active ? request.security("USCBBS", "D", close, currency=currency.USD) : 0)
+rrp             = nz(fed_active ? request.security("RRPONTSYD", "D", close, currency=currency.USD) : 0)
+tga             = nz(fed_active ? request.security("WTREGEN", "D", close, currency=currency.USD) : 0)
+us              := nz(us - rrp - tga)
+// China Balance Sheet
+cn              = nz(pbc_active ? request.security("CNCBBS * CNYUSD", "D", close, currency=currency.USD) : 0)
+// EU Balance Sheet
+eu              = nz(ecb_active ? request.security("EUCBBS * EURUSD", "D", close, currency=currency.USD) : 0)
+// Japan Balance Sheet
+jp              = nz(boj_active ? request.security("JPCBBS * JPYUSD", "D", close, currency=currency.USD) : 0)
+// India Balance Sheet
+ind             = nz(rbi_active ? request.security("INCBBS * INRUSD", "D", close, currency=currency.USD) : 0)
+// United Kingdom Balance Sheet
+uk              = nz(boe_active ? request.security("GBCBBS * GBPUSD", "D", close, currency=currency.USD) : 0)
+// Russia Balance Sheet
+ru              = nz(cbr_active ? request.security("RUCBBS * RUBUSD", "D", close, currency=currency.USD) : 0)
+// Canada Balance Sheet
+can             = nz(boc_active ? request.security("CACBBS * CADUSD", "D", close, currency=currency.USD) : 0)
+// Brazil Balance Sheet
+br              = nz(bcb_active ? request.security("BRCBBS * BRLUSD", "D", close, currency=currency.USD) : 0)
+// Australia Balance Sheet
+au              = nz(rba_active ? request.security("AUCBBS * AUDUSD", "D", close, currency=currency.USD) : 0)
+// South Korea Balance Sheet
+sk              = nz(bok_active ? request.security("KRCBBS * KRWUSD", "D", close, currency=currency.USD) : 0)
+// M2 Real
+m2              = nz(m2_switch ? request.security("USM2", "D", close) : 0)
+// Combined
+cbbs            = m2_switch ? m2 : (us + cn + eu + jp + ind + uk + ru + can + br + au + sk) / 1000000000000
+
+// Calculate returns
+var float prev_close = na
+var float returns = na
+prev_close      := cbbs[period]
+returns         := (cbbs / prev_close - 1) * 100
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                Plotting                                                            //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Color
+ind_color       = returns > 0 ? color.teal : color.red  
+line_color      = color.gray
+// Plot returns
+plot(returns, title="Returns", color = ind_color, style=plot.style_histogram, linewidth=2, offset = chart_offset)
+hline(0,"Zero", color = line_color)
