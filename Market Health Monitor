@@ -26,6 +26,16 @@ ma_4                    = input(120, '4 - ', group = 'Moving Average Lengths')
 
 loans_threshold         = input(20, 'Net % of Banks Started Loans Tightening', group = 'Loans')
 
+include_un_rate         = input(true, 'Unemployment Rate', group = 'Indicators')
+include_infl_rate       = input(true, 'Inflation Rate', group = 'Indicators')
+include_funds_rate      = input(true, 'FED Funds Rate', group = 'Indicators')
+include_cci             = input(true, 'Consumer Confidence Index', group = 'Indicators')
+include_housing_index   = input(true, 'Housing Index', group = 'Indicators')
+include_crude_oil       = input(true, 'Crude Oil Price', group = 'Indicators')
+include_bank_tight      = input(true, 'Bank Credit Tightening', group = 'Indicators')
+include_stocks_growth   = input(true, 'Stocks Growth Rate', group = 'Indicators')
+include_fed_reserve     = input(true, 'GDP Rate', group = 'Indicators')
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                              Economic Indicators                                                   //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,13 +50,13 @@ un_rate_3               = ma.selector(un_rate, ma_3, averageType)
 
 un_score                = (un_rate > un_rate_1 ? 50 : 0) + (un_rate_1 > un_rate_2 ? 25 : 0) 
                          + (un_rate_2 > un_rate_3 ? 25 : 0)
-un_count                = na(un_rate) ? 0 : 1
+un_count                = include_un_rate ? na(un_rate) ? 0 : 1 : 0
 
 // Inflation rate 
 // Reflects the cost of living and purchasing power. 
 // Persistent high inflation can lead to economic instability, while deflation can signal weak demand.
 infl_rate               = request.security('USIRYY', timeframe, close)
-infl_count              = na(infl_rate) ? 0 : 1
+infl_count              = include_infl_rate ? na(infl_rate) ? 0 : 1 : 0
 infl_threshold          = 1.0
 
 infl_poc                = ta.percentile_linear_interpolation(infl_rate, ma_4, 50)
@@ -64,7 +74,7 @@ funds_rate_3            = ma.selector(funds_rate, ma_3, averageType)
 
 funds_score             = (funds_rate <= funds_rate[1] ? 25 : 0) + (funds_rate_1 <= funds_rate_1[1] ? 25 : 0)
                          + (funds_rate_2 <= funds_rate_2[1] ? 25 : 0) + (funds_rate_3 <= funds_rate_3[1] ? 25 : 0)
-funds_count             = na(funds_rate) ? 0 : 1
+funds_count             = include_funds_rate ? na(funds_rate) ? 0 : 1 : 0
 
 
 // Consumer Confidence Index
@@ -76,7 +86,7 @@ cci_2                   = ma.selector(cci_ind, ma_2, averageType)
 cci_3                   = ma.selector(cci_ind, ma_3, averageType)
 
 cci_score               = (cci_ind < cci_1 ? 50 : 0) + (cci_1 < cci_2 ? 25 : 0) + (cci_2 < cci_3 ? 25 : 0) 
-cci_count               = na(cci_ind) ? 0 : 1
+cci_count               = include_cci ? na(cci_ind) ? 0 : 1 : 0
 
 // Housing Market Index
 // The housing market often leads the economy into recession and recovery. 
@@ -85,7 +95,7 @@ house_index             = request.security('USHMI', timeframe, close)
 house_poc               = ta.percentile_linear_interpolation(house_index, ma_4, 50)
 
 house_score             = house_index < house_poc ? 100 : 0
-house_count             = na(house_index) ? 0 : 1
+house_count             = include_housing_index ? na(house_index) ? 0 : 1 : 0
 
 // Crude Oil
 // Oil is one of the main commodities needed for transportation and economical operations.
@@ -96,7 +106,7 @@ crude_2                 = ma.selector(crude_oil, ma_2, averageType)
 crude_3                 = ma.selector(crude_oil, ma_3, averageType)
 
 oil_score               = (crude_oil < crude_1 ? 50 : 0) + (crude_oil < crude_2 ? 25 : 0) + (crude_oil < crude_3 ? 25 : 0)
-oil_count               = (na(crude_oil) or na(crude_1) or na(crude_2) or na(crude_3)) ? 0 : 1
+oil_count               = include_crude_oil ? (na(crude_oil) or na(crude_1) or na(crude_2) or na(crude_3)) ? 0 : 1 : 0
 
 // Net Percentage Of Domestic Banks Tightening Credit Standarts
 // Indicates banks' perceptions of economic risk and can affect business and consumer spending.
@@ -114,7 +124,7 @@ big_biz_score           = big_biz_loans >= loans_threshold ? 100 : 0
 // loans_avg            = consumer_count + small_biz_count + big_biz_count
 
 loans_score             = (consumer_score + small_biz_score + big_biz_score) / 3
-loans_count             = na(loans_score) ? 0 : 1
+loans_count             = include_crude_oil ? na(loans_score) ? 0 : 1 : 0
 
 
 // Stock Market Growth Rate
@@ -123,14 +133,14 @@ index_ma                = ma.selector(index, ma_2, averageType)
 
 delta                   = index_ma - index_ma[1]
 growthrate              = (delta / index_ma[1]) * 100
-growth_count            = na(growthrate) ? 0 : 1
+growth_count            = include_stocks_growth ? na(growthrate) ? 0 : 1 : 0
 
 growth_score            = growthrate <= 0 ? 100 : 0
 
 
 // Federal Reserve GDP/Growth
 gdp_growth              = request.security("GDPC1", timeframe, close)
-gdp_count               = na(gdp_growth) ? 0 : 1
+gdp_count               = include_fed_reserve ? na(gdp_growth) ? 0 : 1 : 0
 var gdp_score = 0
 if gdp_growth>gdp_growth[1]
     gdp_score := 0
