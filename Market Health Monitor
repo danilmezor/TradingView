@@ -4,6 +4,22 @@ indicator('Market Health Monitor', shorttitle = 'MHM', overlay = false, precisio
 // Libraries
 import gotbeatz26107/ma_/2 as ma
 
+// Return On Investment
+roi(metric, period) =>
+    // Calculate returns
+    var float prev_close = na
+    var float returns = na
+    prev_close      := metric[period]
+    returns         := (metric / prev_close - 1) * 100
+// Profiler
+profiler(float src, float percentile, int lookback) =>
+    poc_val = ta.percentile_linear_interpolation(src, lookback, 50)
+    lower_boundary_val = ta.percentile_linear_interpolation(src, lookback, 100 - percentile)
+    upper_boundary_val = ta.percentile_linear_interpolation(src, lookback, percentile)
+    [poc_val, lower_boundary_val, upper_boundary_val]
+
+//
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                              General Parameters                                                    //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,8 +40,12 @@ ma_2                    = input(12, '2 - ', group = 'Moving Average Lengths')
 ma_3                    = input(36, '3 - ', group = 'Moving Average Lengths')
 ma_4                    = input(120, '4 - ', group = 'Moving Average Lengths')
 
+
+roi_period              = input(12)
+claims_percentile       = input(80, 'Jobless Percentile', group = 'Jobless Claims')
 loans_threshold         = input(20, 'Net % of Banks Started Loans Tightening', group = 'Loans')
 
+include_claims          = input(true, 'Continued Jobless Claims', group = 'Indicators')
 include_un_rate         = input(true, 'Unemployment Rate', group = 'Indicators')
 include_infl_rate       = input(true, 'Inflation Rate', group = 'Indicators')
 include_funds_rate      = input(true, 'FED Funds Rate', group = 'Indicators')
@@ -35,10 +55,28 @@ include_crude_oil       = input(true, 'Crude Oil Price', group = 'Indicators')
 include_bank_tight      = input(true, 'Bank Credit Tightening', group = 'Indicators')
 include_stocks_growth   = input(true, 'Stocks Growth Rate', group = 'Indicators')
 include_fed_reserve     = input(true, 'GDP Rate', group = 'Indicators')
+include_gdi             = input(true, 'Gross Domestic Income', group = 'Indicators')
+include_impexp          = input(true, 'Import / Export of Goods and Services', group = 'Indicators')
+include_gpdi            = input(true, 'Real Gross Private Domestic Investment', group = 'Indicators')
+include_fctr            = input(true, 'FED Current Tax Receipts', group = 'Indicators')
+include_iptx            = input(true, 'Industrial Production Total Index', group = 'Indicators')
+include_bsti            = input(true, 'Total Business Sales to Inventories Ratio', group = 'Indicators')
+include_tbs             = input(true, 'Total Business Sales', group = 'Indicators')
+
+res_ma = input(1, 'Result Moving Average', group = 'Final MA')
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                              Economic Indicators                                                   //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Contunued Jobless Claims 
+// Indicates that people can't find any work and there are more people adding to this cohort. 
+// Economy can't expand without workforce.
+continued_claims = request.security('USCJC', timeframe, close)
+claims_roi = roi(continued_claims, roi_period)
+[poc_claims, lower_claims, upper_claims] = profiler(claims_roi, claims_percentile, ma_4)
+claims_score = include_claims ? (claims_roi > poc_claims ? 50 : 0) + (claims_roi > lower_claims ? 25 : 0) + (claims_roi > upper_claims ? 25 : 0) : 0
+claims_count = include_claims ? na(continued_claims) ? 0 : 1 : 0
 
 // Unemployment Rate
 // A lagging indicator that increases in economic downturns. 
@@ -48,8 +86,7 @@ un_rate_1               = ma.selector(un_rate, ma_1, averageType)
 un_rate_2               = ma.selector(un_rate, ma_2, averageType)
 un_rate_3               = ma.selector(un_rate, ma_3, averageType)
 
-un_score                = include_un_rate ? (un_rate > un_rate_1 ? 50 : 0) + (un_rate_1 > un_rate_2 ? 25 : 0) : 0
-                         + (un_rate_2 > un_rate_3 ? 25 : 0)
+un_score                = include_un_rate ? ((un_rate > un_rate_1 ? 50 : 0) + (un_rate_1 > un_rate_2 ? 25 : 0) + (un_rate_2 > un_rate_3 ? 25 : 0)) : 0
 un_count                = include_un_rate ? na(un_rate) ? 0 : 1 : 0
 
 // Inflation rate 
@@ -97,6 +134,29 @@ house_poc               = ta.percentile_linear_interpolation(house_index, ma_4, 
 house_score             = include_housing_index ? house_index < house_poc ? 100 : 0 : 0
 house_count             = include_housing_index ? na(house_index) ? 0 : 1 : 0
 
+//                  Product and business 
+
+// Industrial Production Total Index
+iptx = request.security("INDPRO", timeframe, close)
+iptx_roi = roi(iptx, roi_period)
+[poc_iptx, lower_iptx, upper_iptx] = profiler(iptx_roi, claims_percentile, ma_4)
+iptx_score = include_iptx ? (iptx_roi < poc_iptx ? 50 : 0) + (iptx_roi < lower_iptx ? 25 : 0) + (iptx_roi < upper_iptx ? 25 : 0) : 0
+iptx_count = include_iptx? na(iptx) ? 0 : 1 : 0
+
+// Total Business Sales to Inventories Ratio 
+bsti = request.security("ISRATIO", timeframe, close)
+bsti_roi = roi(bsti, roi_period)
+[poc_bsti, lower_bsti, upper_bsti] = profiler(bsti_roi, claims_percentile, ma_4)
+bsti_score = include_bsti ? (bsti_roi > poc_bsti ? 50 : 0) + (bsti_roi > lower_bsti ? 25 : 0) + (bsti_roi > upper_bsti ? 25 : 0) : 0
+bsti_count = include_bsti? na(bsti) ? 0 : 1 : 0
+
+// Total Business Sales
+tbs = request.security("TOTBUSSMSA", timeframe, close)
+tbs_roi = roi(tbs, roi_period)
+[poc_tbs, lower_tbs, upper_tbs] = profiler(tbs_roi, claims_percentile, ma_4)
+tbs_score = include_tbs ? (tbs_roi < poc_tbs ? 50 : 0) + (tbs_roi < lower_tbs ? 25 : 0) + (tbs_roi < upper_tbs ? 25 : 0) : 0
+tbs_count = include_tbs? na(tbs) ? 0 : 1 : 0
+
 // Crude Oil
 // Oil is one of the main commodities needed for transportation and economical operations.
 // If demand and price of it is going down - it could be a signal of economic weakness. 
@@ -137,6 +197,7 @@ growth_count            = include_stocks_growth ? na(growthrate) ? 0 : 1 : 0
 
 growth_score            = include_stocks_growth ? growthrate <= 0 ? 100 : 0 : 0
 
+//           National income
 
 // Federal Reserve GDP/Growth
 gdp_growth              = request.security("GDPC1", timeframe, close)
@@ -148,19 +209,58 @@ if gdp_growth<gdp_growth[1]
     gdp_score := 100
 gdp_score := include_fed_reserve ? gdp_score : 0
 
+// Gross Domestic Income
+// If GDI grows, then economy is expanding with more opportunities in the future. 
+gdi = request.security("GDI", timeframe, close)
+gdi_roi = roi(gdi, roi_period)
+[poc_gdi, lower_gdi, upper_gdi] = profiler(gdi_roi, claims_percentile, ma_3)
+gdi_score = include_gdi ? (gdi_roi < poc_gdi ? 50 : 0) + (gdi_roi < lower_gdi ? 25 : 0) + (gdi_roi < upper_gdi ? 25 : 0) : 0
+gdi_count = include_gdi? na(gdi) ? 0 : 1 : 0
+
+// Imports / Exports of Goods and Services
+// If there is a lot of imports - this is not very good, especially if amount of import is exceeding amount of export. 
+impgs = request.security("IMPGSC1", timeframe, close)
+impgs_roi = roi(impgs, roi_period)
+[poc_impgs, lower_impgs, upper_impgs] = profiler(impgs_roi, claims_percentile, ma_3)
+impgs_score = (impgs_roi < poc_impgs ? 50 : 0) + (impgs_roi < lower_impgs ? 25 : 0) + (impgs_roi < upper_impgs ? 25 : 0)
+
+expgs = request.security("EXPGSC1", timeframe, close)
+expgs_roi = roi(expgs, roi_period)
+[poc_expgs, lower_expgs, upper_expgs] = profiler(expgs_roi, claims_percentile, ma_3)
+expgs_score = (expgs_roi < poc_expgs ? 50 : 0) + (expgs_roi < lower_expgs ? 25 : 0) + (expgs_roi < upper_expgs ? 25 : 0)
+
+impexp_score = not include_impexp or na(impgs) or na(expgs) ? 0 : (impgs_score + expgs_score) / 2
+impexp_count = not include_impexp or na(impgs) or na(expgs) ? 0 : 1
+
+// Real Gross Private Domestic Investment
+gpdi = request.security("GPDIC1", timeframe, close)
+gpdi_roi = roi(gpdi, roi_period)
+[poc_gpdi, lower_gpdi, upper_gpdi] = profiler(gpdi_roi, claims_percentile, ma_3)
+gpdi_score = include_gpdi ? (gpdi_roi < poc_gpdi ? 50 : 0) + (gpdi_roi < lower_gpdi ? 25 : 0) + (gpdi_roi < upper_gpdi ? 25 : 0) : 0
+gpdi_count = include_gpdi? na(gpdi) ? 0 : 1 : 0
+
+// FED Current Tax Receipts  
+fctr = request.security("W006RC1Q027SBEA", timeframe, close)
+fctr_roi = roi(fctr, roi_period)
+[poc_fctr, lower_fctr, upper_fctr] = profiler(fctr_roi, claims_percentile, ma_4)
+fctr_score = include_fctr ? (fctr_roi < poc_fctr ? 50 : 0) + (fctr_roi < lower_fctr ? 25 : 0) + (fctr_roi < upper_fctr ? 25 : 0) : 0
+fctr_count = include_fctr? na(fctr) ? 0 : 1 : 0
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                              Score Calculations                                                    //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 indicator_count         = un_count + infl_count + funds_count + cci_count + house_count + oil_count 
-                         + growth_count + gdp_count + loans_count
+                         + growth_count + gdp_count + loans_count + claims_count + gdi_count + impexp_count 
+                         + gpdi_count + fctr_count + iptx_count + bsti_count + tbs_count
 
-score = (un_score + infl_score + funds_score + cci_score + house_score + oil_score + growth_score + gdp_score + loans_score) 
+score = (un_score + infl_score + funds_score + cci_score + house_score + oil_score + growth_score + gdp_score + loans_score + claims_score + gdi_score + impexp_score + gpdi_score + fctr_score + iptx_score + bsti_score + tbs_score) 
                   / indicator_count
+score_ma = ta.sma(score, res_ma)
 
 // Indicator states
-econ_downtrend          = score > recession_threshold
-econ_uptrend            = score < growth_threshold
+econ_downtrend          = score_ma > recession_threshold
+econ_uptrend            = score_ma < growth_threshold
 recessions              = request.security("USREC", timeframe, close) // Actual Recessions
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -169,6 +269,7 @@ recessions              = request.security("USREC", timeframe, close) // Actual 
 
 // Colors 
 white                   = color.white
+aqua                    = color.aqua
 green_signal            = color.rgb(0, 137, 123, 50)
 red_signal              = color.rgb(255, 82, 82, 50)
 red_recession           = color.new(#ff5252, 60)
@@ -179,5 +280,7 @@ bgcolor(recessions ? red_recession : na, title = 'Recession')
 
 // Plots
 plot(score, color = white, title = 'Oscillator Score', linewidth = 2)
+plot(score_ma, color = aqua, title = 'Oscillator MA', linewidth = 2)
+
 hline(recession_threshold, 'Recession Threshold')
 hline(growth_threshold, title = 'Expansion Threshold')
