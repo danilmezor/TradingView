@@ -1,0 +1,52 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © gotbeatz26107
+
+//@version=5
+indicator("Miners Fee Revenue Risk", shorttitle = 'MFRR', overlay = false, precision = 1)
+
+// Sum of all fees paid in a day
+fee_usd             = request.security("COINMETRICS:" + syminfo.basecurrency + "_FEEUSD", 'D', close, ignore_invalid_symbol = true)
+
+// MA and BB settings
+fee_ma              = input(730, title = "MA length", group = "Indicator settings")
+bb_mult             = input(1.2, title = "Bollinger Bands Multiplier", group = "Indicator settings")
+
+//--------------------------------------------------------------------------------------------------------------------//
+//-------------------------------------------------Calculation--------------------------------------------------------//
+//--------------------------------------------------------------------------------------------------------------------//
+
+fee_30              = ta.sma(fee_usd, 30)
+fee_diff            = ta.change(fee_usd)
+
+// Identify days with increasing fee pressure (1 if increase, 0 otherwise)
+increasing_pressure = fee_diff > 0 ? 1 : 0
+
+// Sum of increasing pressure days over the last 30 days
+increasing_days_sum = math.sum(increasing_pressure, 30)
+
+// Calculate MFR-BI
+mfr_bi              = increasing_days_sum / 30 * 100
+
+mfr_ma              = ta.sma(mfr_bi, fee_ma)
+mfr_std             = bb_mult * ta.stdev(mfr_bi, fee_ma)
+mfr_upper           = mfr_ma + mfr_std
+mfr_lower           = mfr_ma - mfr_std
+
+// Determine risk level and color
+var color risk_color = color.white
+if mfr_bi > mfr_upper
+    risk_color := color.red       // Very High Risk
+else if mfr_bi > mfr_ma
+    risk_color := color.orange    // High Risk
+else if mfr_bi > mfr_lower
+    risk_color := color.yellow    // Low Risk
+else
+    risk_color := color.green     // Very Low Risk
+
+// Plot MFR-BI
+plot(mfr_bi, title="MFRR", color = risk_color, linewidth=1)
+
+// Plot risk levels as horizontal lines for reference
+plot(mfr_upper, "Very High Risk", color.red)
+plot(mfr_ma, "High Risk", color.gray)
+plot(mfr_lower, "Low Risk", color.teal)
