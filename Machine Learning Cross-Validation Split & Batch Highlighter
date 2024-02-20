@@ -1,0 +1,57 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © gotbeatz26107
+
+//@version=5
+indicator("ML Cross-Validation Split & Batch Highlighter", shorttitle = 'ML-CV S&B', overlay=true)
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                              General Parameters                                                    //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+max_splits          = 24
+num_splits          = input.int(6, "Number of Splits", minval=1, maxval=max_splits)
+batch_size          = input.int(120, "Batch Size", minval=1)
+start_index         = input.int(1000, "Start Index", minval=0)
+end_index           = input.int(4500, "End Index", minval=1)
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                 Calculation                                                        //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Calculate the range of data to be used
+total_bars          = end_index - start_index + 1
+// Calculate split size
+split_size          = math.ceil(total_bars / num_splits)
+
+// Function to get split color
+getSplitColor(index) =>
+    color[] split_colors = array.from(color.maroon, color.red, color.orange, color.yellow, 
+                                     color.green, color.teal, color.aqua, color.blue, 
+                                     color.purple, color.fuchsia,  color.gray, color.white, 
+                                     color.maroon, color.red, color.orange, color.yellow, 
+                                     color.green, color.teal, color.aqua, color.blue, 
+                                     color.purple, color.fuchsia,  color.gray, color.white)
+    if index >= 0 and index < array.size(split_colors)
+        array.get(split_colors, index)
+    else
+        color.gray // Default color if index is out of bounds
+
+// Determine the current split and batch for the current bar
+int split_index     = na
+int batch_index     = na
+if bar_index >= start_index and bar_index <= end_index
+    split_index := math.max(math.floor((bar_index - start_index) / split_size), 0)
+    batch_index := math.floor(((bar_index - start_index) % split_size) / batch_size)
+    // Ensure the split index is within the correct range
+    split_index := math.min(split_index, num_splits - 1)
+
+// Get the color for the current split
+split_color         = color.rgb(0, 0, 0)
+split_color         := getSplitColor(split_index)
+
+// Determine batch color
+batch_color         = color.rgb(0, 0, 0)
+batch_color         := batch_index % 2 == 0 ? color.new(split_color, 90) : color.new(split_color, 60)
+
+// Set the background color for the current bar, considering the specified range
+bgcolor(bar_index >= start_index and bar_index <= end_index ? batch_color : na, transp=0)
