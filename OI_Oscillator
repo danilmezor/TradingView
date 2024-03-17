@@ -143,3 +143,14 @@ plot(show_osc ? low_threshold : na, color = green, title = 'Low Threshold')
 // Signals
 bgcolor(oi_hlc3 > high_threshold and show_signals ? red_signal : blank, title = 'Red Signal')
 bgcolor(oi_hlc3 < low_threshold and show_signals ? green_signal : blank, title = 'Green Signal')
+
+// Alerts
+crossover_up = ta.crossover(oi_hlc3, high_threshold)
+crossunder_up = ta.crossunder(oi_hlc3, high_threshold)
+crossover_down = ta.crossover(oi_hlc3, low_threshold)
+crossunder_down = ta.crossunder(oi_hlc3, low_threshold)
+
+alertcondition(crossover_up, title = 'OI Crossed Over Top Threshold')
+alertcondition(crossunder_up, title = 'OI Crossed Under Top Threshold')
+alertcondition(crossover_down, title = 'OI Crossed Over Bottom Threshold')
+alertcondition(crossunder_down, title = 'OI Crossed Under Bottom Threshold')
