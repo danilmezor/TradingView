@@ -1,0 +1,67 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © gotbeatz26107
+
+//@version=5
+indicator("Trend Angle", overlay=false)
+
+// Libraries
+import gotbeatz26107/ma_/2 as ma
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                               Indicator Parameters                                                 //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+source              = input(close, title = 'Indicator Source', group = 'General')
+detrend             = input(false, 'Detrend Indicator?', group = 'General')
+length              = input(90, "Length", group = 'General')
+colorize			= input(true, 'Colorize Indicator?', group = 'General')
+
+smoother_type       = input.string('Linear Regression', title = 'Smoother Type', options = ['Moving Average', 'Linear Regression'], group = 'Smoothing')
+average_type 		= input.string("EMA", options = ['SMA', 'EMA', 'ALMA', 'AHMA', 'BMF', 'DEMA', 'DSWF'
+     									, 'EVWMA', 'ESD', 'FRAMA', 'FLSMA', 'GMMA', 'HCF', 'HMA', 'JMA', 'KAMA', 'KIJUN'
+    			 						, 'LSMA', 'LMA', 'MD', 'MF', 'MM', 'SMMA', 'SSMA', 'SWMA', 'TEMA', 'TSF'
+									 	, 'VAR', 'VAMA', 'VMA', 'VBMA', 'VIDA', 'VWMA', 'WMA', 'QMA', 'RPMA'
+                                         , 'RSRMA', 'ZLEMA'], title = "MA Type", group = 'Smoothing')
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                   Calculation                                                      //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Calculate the angle
+trend_angle(source, length) =>
+	price_change         = (source - source[length]) / source[length]
+	angle_radians        = math.atan(price_change)
+	angle_degrees        = angle_radians * (180 / math.pi)
+//
+angle 				= trend_angle(source, length)
+angle_smooth        = ma.selector(angle, length, average_type)
+regression          = ta.linreg(angle, length, 0)
+smoother            = smoother_type == 'Linear Regression' ? regression : angle_smooth
+
+// Final Calculation
+indicator           = detrend ? angle - smoother : angle
+threshold 			= detrend ? 0 : smoother
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                    Plotting                                                        //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//  Colors
+calculate_color(indicator, threshold, color_positive, color_negative, transparency_factor) =>
+    transparency = transparency_factor - math.abs(indicator)
+    filterColor = indicator > threshold ? color.new(color_positive, transparency) : color.new(color_negative, transparency)
+    filterColor
+//
+positive_color 		= color.teal
+negative_color 		= color.red
+hline_color 		= color.gray
+smooth_color		= color.yellow
+angle_color 		= colorize ? calculate_color(indicator, threshold, positive_color, negative_color, 70) : color.white
+
+// Main 
+zero_line 			= hline(detrend ? na : 0, linestyle = hline.style_solid, color = hline_color)
+smooth_plot 		= plot(detrend ? 0 : threshold, title = 'Average', color = colorize ? hline_color : smooth_color, style = plot.style_line)
+main_plot 			= plot(indicator, "Angle", color = angle_color)
+
+// Color fill
+fill(main_plot, smooth_plot, colorize ? angle_color : na)
