@@ -8,41 +8,35 @@ library("ma_")
 
 // Simple Moving Average
 export sma(float src, simple int length) =>
-
-    // Input
-    sma = src
-
-    // Calculation
+    sma = 0.0
     for i = 0 to length - 1
-        sma += src[i] / length
-    
-    // Output
-    sma
+        sma := sma + src[i]
+    sma := sma / length
 //
 export sma(float src, series int length) =>
-
-    // Input
-    sma = src
-
-    // Calculation
+    sma = 0.0
     for i = 0 to length - 1
-        sma += src[i] / length
-    
-    // Output
-    sma
+        sma := sma + src[i]
+    sma := sma / length
 //
 
 // Ehlers Instantaneous Trendline
 export eit(float src) =>
 
     // Input
-    ma = src
     eit_alpha = 0.07
 
-    // Calculation
-    ma := bar_index < 7 ? (src + (2 * nz(src[1])) + nz(src[2])) / 4 : ((0.07 - (math.pow(eit_alpha, 2) / 4)) * src)
-    + (0.5 * math.pow(eit_alpha, 2) * nz(src[1])) - ((eit_alpha - (0.75 * math.pow(eit_alpha, 2))) * nz(src[2]))
-     + (2 * (1 - eit_alpha) * nz(ma[1])) - (math.pow(1 - eit_alpha, 2) * nz(ma[2]))
+    // Initialization for first 6 bars
+    ma = src
+    if bar_index < 7
+        ma := (src + (2 * nz(src[1])) + nz(src[2])) / 4
+    else
+        // Full EIT Calculation
+        ma := ((0.07 - (math.pow(eit_alpha, 2) / 4)) * src) +
+              (0.5 * math.pow(eit_alpha, 2) * nz(src[1])) -
+              ((eit_alpha - (0.75 * math.pow(eit_alpha, 2))) * nz(src[2])) +
+              (2 * (1 - eit_alpha) * nz(ma[1])) -
+              (math.pow(1 - eit_alpha, 2) * nz(ma[2]))
 
     // Output
     ma
@@ -50,50 +44,24 @@ export eit(float src) =>
 
 // Exponential moving Average
 export ema(float src, simple int length) =>
-
-    // Input
     ema = src
-
-    // Calculation
     ema := na(ema[1]) ? src : (src - nz(ema[1])) * (2 / (length + 1)) + nz(ema[1])
-
-    // Output
-    ema
 //
 export ema(float src, series int length) =>
-
-    // Input
     ema = src
-
-    // Calculation
     ema := na(ema[1]) ? src : (src - nz(ema[1])) * (2 / (length + 1)) + nz(ema[1])
-
-    // Output
-    ema
 //
 
 // Ahrens Moving Average
 export ahma(float src, simple int length) =>
-
-    // Input
     ma = src
-
-    // Calculation
-    ma := nz(ma[1]) + (src - (nz(ma[1]) + nz(ma[length])) / 2) / length 
-
-    // Output
-    ma
+    ma := nz(ma[1], src)
+    ma := ma + (src - nz(src[length], src)) / length
 //
 export ahma(float src, series int length) =>
-
-    // Input
     ma = src
-
-    // Calculation
-    ma := nz(ma[1]) + (src - (nz(ma[1]) + nz(ma[length])) / 2) / length 
-
-    // Output
-    ma
+    ma := nz(ma[1], src)
+    ma := ma + (src - nz(src[length], src)) / length
 //
 
 // Blackman Filter
@@ -270,118 +238,70 @@ export dswf(float src, series int length) =>
 
 // Elastic Volume Weighted MA
 export evwma(float src, simple int length, float volume) =>
-
-    // Input
-    ma = src
     volume_sum = math.sum(volume, length)
-
-    // Calculation
-    ma := ((volume_sum - volume) * nz(ma[1]) + volume * src ) / volume_sum
-
-    // Output
+    ma = src
+    ma := ((volume_sum - volume) * nz(ma[1], src) + volume * src ) / volume_sum
     ma
 //
 export evwma(float src, series int length, float volume) =>
-
-    // Input
-    ma = src
     volume_sum = math.sum(volume, length)
-
-    // Calculation
-    ma := ((volume_sum - volume) * nz(ma[1]) + volume * src ) / volume_sum
-
-    // Output
+    ma = src
+    ma := ((volume_sum - volume) * nz(ma[1], src) + volume * src ) / volume_sum
     ma
 //
 
 // Ehlers Simple Decycler
 export esd(float src, simple int length) =>
-
-    // Input
-    ma = src
-    eit_alpha = 0.07
-
-    // Calculation
-    alphaArg = 2 * math.pi / (length * math.sqrt(2))
-        
     alpha = 0.0
-    alpha := math.cos(alphaArg) != 0
-         ? (math.cos(alphaArg) + math.sin(alphaArg) - 1) / math.cos(alphaArg)
-         : nz(alpha[1])
-        
+    alphaArg = 2 * math.pi / (length * math.sqrt(2))
+    alpha := math.cos(alphaArg) != 0 ? (math.cos(alphaArg) + math.sin(alphaArg) - 1) / math.cos(alphaArg) : nz(alpha[1])
     hp = 0.0
     hp := math.pow(1 - (alpha / 2), 2) * (src - 2 * nz(src[1]) + nz(src[2])) + 2 * (1 - alpha) * nz(hp[1]) - math.pow(1 - alpha, 2) * nz(hp[2])
-    
+    ma = src
     ma := src - hp
-
-    // Output
     ma
 //
 export esd(float src, series int length) =>
-
-    // Input
-    ma = src
-    eit_alpha = 0.07
-
-    // Calculation
-    alphaArg = 2 * math.pi / (length * math.sqrt(2))
-        
     alpha = 0.0
-    alpha := math.cos(alphaArg) != 0
-         ? (math.cos(alphaArg) + math.sin(alphaArg) - 1) / math.cos(alphaArg)
-         : nz(alpha[1])
-        
-    hp = 0.0
+    alphaArg = 2 * math.pi / (length * math.sqrt(2))
+    alpha := math.cos(alphaArg) != 0 ? (math.cos(alphaArg) + math.sin(alphaArg) - 1) / math.cos(alphaArg) : nz(alpha[1])
+    hp = 0.0        
     hp := math.pow(1 - (alpha / 2), 2) * (src - 2 * nz(src[1]) + nz(src[2])) + 2 * (1 - alpha) * nz(hp[1]) - math.pow(1 - alpha, 2) * nz(hp[2])
-    
+    ma = src
     ma := src - hp
-    
-    // Output
     ma
 //
 
 // Fractal Adaptive MA
 export frama(float src, simple int length) =>
+    length2 = math.floor(length / 2)
+    hh2 = ta.highest(length2)
+    ll2 = ta.lowest(length2)
+    
+    N1 = (hh2 - ll2) / length2
+    N2 = (hh2[length2] - ll2[length2]) / length2
+    N3 = (ta.highest(length) - ta.lowest(length)) / length 
+    D = (math.log(N1 + N2) - math.log(N3)) / math.log(2)
+    factor = math.exp(-4.6 * (D - 1))
 
-	// Input
-	ma 			= src
-
-	// Calculation
-    length2     = math.floor(length / 2)
-    hh2         = ta.highest(length2)
-    ll2         = ta.lowest(length2)
-        
-    N1          = (hh2 - ll2) / length2
-    N2          = (hh2[length2] - ll2[length2]) / length2
-    N3          = (ta.highest(length) - ta.lowest(length)) / length 
-    D           = (math.log(N1 + N2) - math.log(N3)) / math.log(2)
-    factor      = math.exp(-4.6 * (D - 1))
-
-    ma          := factor * src + (1 - factor) * nz(ma[1])
-
-	// Output
-	ma
+    ma = src
+    ma := factor * src + (1 - factor) * nz(ma[1])
+    ma
 //
 export frama(float src, series int length) =>
-
-	// Input
-	ma 			= src
-
-	// Calculation
-    length2     = math.floor(length / 2)
-    hh2         = ta.highest(length2)
-    ll2         = ta.lowest(length2)
-        
-    N1          = (hh2 - ll2) / length2
-    N2          = (hh2[length2] - ll2[length2]) / length2
-    N3          = (ta.highest(length) - ta.lowest(length)) / length 
-    D           = (math.log(N1 + N2) - math.log(N3)) / math.log(2)
-    factor      = math.exp(-4.6 * (D - 1))
-
-    ma          := factor * src + (1 - factor) * nz(ma[1])
+    length2 = math.floor(length / 2)
+    hh2 = ta.highest(length2)
+    ll2 = ta.lowest(length2)
     
-	// Output
-	ma
+    N1 = (hh2 - ll2) / length2
+    N2 = (hh2[length2] - ll2[length2]) / length2
+    N3 = (ta.highest(length) - ta.lowest(length)) / length 
+    D = (math.log(N1 + N2) - math.log(N3)) / math.log(2)
+    factor = math.exp(-4.6 * (D - 1))
+
+    ma = src
+    ma := factor * src + (1 - factor) * nz(ma[1])
+    ma
 //
 
 // Fisher Least Squares MA
@@ -418,30 +338,18 @@ export flsma(float src, series int len) =>
 
 // Geometric Mean MA
 export gmma(float src, simple int length) =>
-
-	// Input
-	ma 			= src
-
-	// Calculation
-    lmean       = math.log(src)
-    smean       = math.sum(lmean, length)
-
-    ma          := math.exp(smean / length)
-	// Output
-	ma
+    lmean = math.log(src)
+    smean = math.sum(lmean, length)
+    ma = src
+    ma := math.exp(smean / length)
+    ma
 //
 export gmma(float src, series int length) =>
-
-	// Input
-	ma 			= src
-
-	// Calculation
-    lmean       = math.log(src)
-    smean       = math.sum(lmean, length)
-
-    ma          := math.exp(smean / length)
-	// Output
-	ma
+    lmean = math.log(src)
+    smean = math.sum(lmean, length)
+    ma = src
+    ma := math.exp(smean / length)
+    ma
 //
 
 // Hybrid Convolution Filter
@@ -478,27 +386,15 @@ export hcf(float src, series int length) =>
 	ma
 //
 
-// Double Exponential Moving Average
+// Hull Moving Average
 export hma(float src, simple int length) =>
-
-	// Input
 	ma 			= src
-
-	// Calculation
     ma 			:= ta.wma(2 * ta.wma(src, length / 2) - ta.wma(src, length), math.round(math.sqrt(length)))
-
-	// Output
 	ma
 //
 export hma(float src, series int length) =>
-
-	// Input
 	ma 			= src
-
-	// Calculation
     ma 			:= ta.wma(2 * ta.wma(src, length / 2) - ta.wma(src, length), math.round(math.sqrt(length)))
-
-	// Output
 	ma
 //
 
@@ -659,28 +555,6 @@ export lma(float src, series int length) =>
 
     // Calculation
     ma 			:= 2 * ta.wma(src, length) - ta.sma(src, length)
-
-	// Output
-    ma	
-//
-
-// McGinley Dynamic
-export md(float src, simple int length) =>
-
-	// Input
-	ma 			= 0.0
-    // Calculation
-    ma 			:= na(ma[1]) ? ema(src, length) : ma[1] + (src - ma[1]) / (length * math.pow(src / ma[1], 4))
-
-	// Output
-    ma	
-//
-export md(float src, series int length) =>
-
-	// Input
-	ma 			= 0.0
-    // Calculation
-    ma 			:= na(ma[1]) ? ema(src, length) : ma[1] + (src - ma[1]) / (length * math.pow(src / ma[1], 4))
 
 	// Output
     ma	
@@ -1295,32 +1169,16 @@ export rsrma(float src, series int length) =>
 
 // Zero Lag Exponential Moving Average 
 export zlema(float src, simple int length) =>
-
-	// Input
-	ma 			= src
-
-	// Calculation
-    linreg 		= ta.linreg(src, length, 0)
-    linregZ 	= ta.linreg(src, length, 1)
-    lrs 		= linreg - linregZ
-    ma 			:= ta.linreg(src, length, 0) + lrs
-
-	// Output
-	ma
+    lag = math.ceil((length - 1) / 2)
+    emaSrc = src - nz(src[lag], src) + src
+    ma = ema(emaSrc, length)
+    ma
 //
 export zlema(float src, series int length) =>
-
-	// Input
-	ma 			= src
-
-	// Calculation
-    linreg 		= ta.linreg(src, length, 0)
-    linregZ 	= ta.linreg(src, length, 1)
-    lrs 		= linreg - linregZ
-    ma 			:= ta.linreg(src, length, 0) + lrs
-
-	// Output
-	ma
+    lag = math.ceil((length - 1) / 2)
+    emaSrc = src - nz(src[lag], src) + src
+    ma = ema(emaSrc, length)
+    ma
 //
 
 // @function This function gives trader an instrument to test different kinds of moving averages on their strategy.
@@ -1330,129 +1188,124 @@ export selector(float src, simple int length, string selectMA) =>
     // MA selection
     ma 			= src
 
-    if selectMA == 'SMA'
-        ma 	:= ta.sma(src, length)
+    if selectMA == 'SMA | Simple MA'
+        ma 	:= sma(src, length)
 
-    else if selectMA == 'EMA'
+    else if selectMA == 'EMA | Exponential MA'
         ma := ema(src, length)
 
-    else if selectMA == 'EIT'
+    else if selectMA == 'EIT | Ehlers Instantaneous Trendline'
         ma := eit(src)
 
-	else if selectMA == 'ALMA'
+	else if selectMA == 'ALMA | Arnaud Legoux MA'
         ma := ta.alma(src, length, 0.85, 6)
 
-    else if selectMA == 'AHMA'
+    else if selectMA == 'AHMA | Ahrens MA'
         ma := ahma(src, length)
 
-    else if selectMA == 'BMF'
+    else if selectMA == 'BMF | Blackman Filter'
         ma := bmf(src, length)
 
-    else if selectMA == 'CMA'
+    else if selectMA == 'CMA | Corrective Moving Average'
         ma := cma(src, length)
 
-	else if selectMA == 'DEMA'
+	else if selectMA == 'DEMA | Double Exponential MA'
 		ma := dema(src, length)
 
-    else if selectMA == 'DSWF'
+    else if selectMA == 'DSWF | Damped Sine Wave Filter'
         ma := dswf(src, length)
 
-    else if selectMA == 'ESD'
+    else if selectMA == 'ESD | Ehlers Simple Decycler'
         ma := esd(src, length)
 
-    else if selectMA == 'FRAMA'
+    else if selectMA == 'FRAMA | Fractal Adaptive MA'
         ma := frama(src, length)
 
-    else if selectMA == 'FLSMA'
+    else if selectMA == 'FLSMA | Fisher Least Squares MA'
         ma := flsma(src, length)
 
-    else if selectMA == 'GMMA'
+    else if selectMA == 'GMMA | Geometric Mean MA'
         ma := gmma(src, length)
 
-    else if selectMA == 'HCF'
+    else if selectMA == 'HCF | Hybrid Convolution Filter'
         ma := hcf(src, length)
 
-    else if selectMA == 'HMA'
-        ma := ta.hma(src, length)
+    else if selectMA == 'HMA | Hull MA'
+        ma := hma(src, length)
 
-    else if selectMA == 'JMA'
+    else if selectMA == 'JMA | Jurik MA'
         ma := jma(src, length)
 
-    else if selectMA == 'KAMA'
+    else if selectMA == 'KAMA | Kaufman Adaptive MA'
         ma := kama(src, length)
 
-    else if selectMA == 'KIJUN'
+    else if selectMA == 'KIJUN | Kijun-sen (Ichimoku Component)'
         ma := kijun(src, length)
 
-    else if selectMA == 'LSMA'
+    else if selectMA == 'LSMA | Least Squares (Linreg)'
         ma := lsma(src, length)
 
-    else if selectMA == 'LMA'
+    else if selectMA == 'LMA | Leo MA'
         ma := lma(src, length)
 
-    else if selectMA == 'MD'
-        ma := md(src, length)
-
-    else if selectMA == 'MF'
+    else if selectMA == 'MF | Modular Filter'
         ma := mf(src, length)
 
-    else if selectMA == 'MM'
+    else if selectMA == 'MM | Moving Median'
         ma := mm(src, length)
 
-    else if selectMA == 'SMMA'
+    else if selectMA == 'SMMA | Smoothed MA'
         ma := smma(src, length)
 
-    else if selectMA == 'SSMA'
+    else if selectMA == 'SSMA | Shapeshifting MA'
         ma := ssma(src, length)
 
-    else if selectMA == 'SWMA'
+    else if selectMA == 'SWMA | Sine Weighted MA'
         ma := swma(src, length)
 
-    else if selectMA == 'TMA'
+    else if selectMA == 'TMA | Triangular MA'
         ma := tma(src, length)
 
-    else if selectMA == 'TEMA'
+    else if selectMA == 'TEMA | Triple Exponential MA'
         ma := tema(src, length)
 
-    else if selectMA == 'TSF'
+    else if selectMA == 'TSF | True Strength Force'
         ma := tsf(src, length)
 
-    else if selectMA == 'VAR'
+    else if selectMA == 'VARMA | Vector Autoregression MA'
         ma := varma(src, length)
 
-    else if selectMA == 'VAMA'
-        ma := vama(src, length)
-
-    else if selectMA == 'VBMA'
+    else if selectMA == 'VBMA | Variable MA'
 		ma := vbma(src, length)
 
-    else if selectMA == 'VIDA'
+    else if selectMA == 'VIDA | Variable Index Dynamic Average'
 		ma := vida(src, length)
 
-    else if selectMA == 'VMA'
+    else if selectMA == 'VBMA | Variable MA'
         ma := vma(src, length)
 
-    else if selectMA == 'VAMA'
+    else if selectMA == 'VAMA | Volume Adjusted MA'
 		ma := vama(src, length)
 
-    else if selectMA == 'VWMA'
+    else if selectMA == 'VWMA | Volume Weighted MA'
         ma := ta.vwma(src, length)
 
-    else if selectMA == 'WMA'
+    else if selectMA == 'WMA | Weighted MA'
         ma := ta.wma(src, length)
 
-    else if selectMA == 'QMA'
+    else if selectMA == 'QMA | Quick MA'
 		ma := qma(src, length)
 
-    else if selectMA == 'RPMA'
+    else if selectMA == 'RPMA | Repulsion MA'
 		ma := rpma(src, length)
 
-    else if selectMA == 'RSRMA'
+    else if selectMA == 'RSRMA | Right Sided Ricker MA'
 		ma := rsrma(src, length)
 
-    else if selectMA == 'ZLEMA'
+    else if selectMA == 'ZLEMA | Zero Lag Exponential MA'
 		ma := zlema(src, length)
-
+    else if selectMA == 'EVWMA | Elastic Volume Weighted MA'
+        ma := evwma(src, length, volume)
 	// Output
     ma
 //
@@ -1461,147 +1314,157 @@ export selector(float src, series int length, string selectMA) =>
     // MA selection
     ma 			= src
 
-    if selectMA == 'SMA'
+    if selectMA == 'SMA | Simple MA'
         ma 	:= sma(src, length)
 
-    else if selectMA == 'EMA'
+    else if selectMA == 'EMA | Exponential MA'
         ma := ema(src, length)
 
-    else if selectMA == 'EIT'
+    else if selectMA == 'EIT | Ehlers Instantaneous Trendline'
         ma := eit(src)
 
-	else if selectMA == 'ALMA'
+	else if selectMA == 'ALMA | Arnaud Legoux MA'
         ma := ta.alma(src, length, 0.85, 6)
 
-    else if selectMA == 'AHMA'
+    else if selectMA == 'AHMA | Ahrens MA'
         ma := ahma(src, length)
 
-    else if selectMA == 'BMF'
+    else if selectMA == 'BMF | Blackman Filter'
         ma := bmf(src, length)
 
-    else if selectMA == 'CMA'
+    else if selectMA == 'CMA | Corrective Moving Average'
         ma := cma(src, length)
 
-	else if selectMA == 'DEMA'
+	else if selectMA == 'DEMA | Double Exponential MA'
 		ma := dema(src, length)
 
-    else if selectMA == 'DSWF'
+    else if selectMA == 'DSWF | Damped Sine Wave Filter'
         ma := dswf(src, length)
 
-    else if selectMA == 'ESD'
+    else if selectMA == 'ESD | Ehlers Simple Decycler'
         ma := esd(src, length)
 
-    else if selectMA == 'FRAMA'
+    else if selectMA == 'FRAMA | Fractal Adaptive MA'
         ma := frama(src, length)
 
-    else if selectMA == 'FLSMA'
+    else if selectMA == 'FLSMA | Fisher Least Squares MA'
         ma := flsma(src, length)
 
-    else if selectMA == 'GMMA'
+    else if selectMA == 'GMMA | Geometric Mean MA'
         ma := gmma(src, length)
 
-    else if selectMA == 'HCF'
+    else if selectMA == 'HCF | Hybrid Convolution Filter'
         ma := hcf(src, length)
 
-    // else if selectMA == 'HMA'
-    //     ma := ta.hma(src, length)
+    else if selectMA == 'HMA | Hull MA'
+        ma := hma(src, length)
 
-    else if selectMA == 'JMA'
+    else if selectMA == 'JMA | Jurik MA'
         ma := jma(src, length)
 
-    else if selectMA == 'KAMA'
+    else if selectMA == 'KAMA | Kaufman Adaptive MA'
         ma := kama(src, length)
 
-    else if selectMA == 'KIJUN'
+    else if selectMA == 'KIJUN | Kijun-sen (Ichimoku Component)'
         ma := kijun(src, length)
 
-    else if selectMA == 'LSMA'
+    else if selectMA == 'LSMA | Least Squares (Linreg)'
         ma := lsma(src, length)
 
-    else if selectMA == 'LMA'
+    else if selectMA == 'LMA | Leo MA'
         ma := lma(src, length)
 
-    else if selectMA == 'MD'
-        ma := md(src, length)
-
-    else if selectMA == 'MF'
+    else if selectMA == 'MF | Modular Filter'
         ma := mf(src, length)
 
-    else if selectMA == 'MM'
+    else if selectMA == 'MM | Moving Median'
         ma := mm(src, length)
 
-    else if selectMA == 'SMMA'
+    else if selectMA == 'SMMA | Smoothed MA'
         ma := smma(src, length)
 
-    else if selectMA == 'SSMA'
+    else if selectMA == 'SSMA | Shapeshifting MA'
         ma := ssma(src, length)
 
-    else if selectMA == 'SWMA'
+    else if selectMA == 'SWMA | Sine Weighted MA'
         ma := swma(src, length)
 
-    else if selectMA == 'TMA'
+    else if selectMA == 'TMA | Triangular MA'
         ma := tma(src, length)
 
-    else if selectMA == 'TEMA'
+    else if selectMA == 'TEMA | Triple Exponential MA'
         ma := tema(src, length)
 
-    else if selectMA == 'TSF'
+    else if selectMA == 'TSF | True Strength Force'
         ma := tsf(src, length)
 
-    else if selectMA == 'VAR'
+    else if selectMA == 'VARMA | Vector Autoregression MA'
         ma := varma(src, length)
 
-    else if selectMA == 'VAMA'
-        ma := vama(src, length)
-
-    else if selectMA == 'VBMA'
+    else if selectMA == 'VBMA | Variable MA'
 		ma := vbma(src, length)
 
-    else if selectMA == 'VIDA'
+    else if selectMA == 'VIDA | Variable Index Dynamic Average'
 		ma := vida(src, length)
 
-    else if selectMA == 'VMA'
+    else if selectMA == 'VBMA | Variable MA'
         ma := vma(src, length)
 
-    else if selectMA == 'VAMA'
+    else if selectMA == 'VAMA | Volume Adjusted MA'
 		ma := vama(src, length)
 
-    else if selectMA == 'VWMA'
+    else if selectMA == 'VWMA | Volume Weighted MA'
         ma := ta.vwma(src, length)
 
-    else if selectMA == 'WMA'
+    else if selectMA == 'WMA | Weighted MA'
         ma := ta.wma(src, length)
 
-    else if selectMA == 'QMA'
+    else if selectMA == 'QMA | Quick MA'
 		ma := qma(src, length)
 
-    else if selectMA == 'RPMA'
+    else if selectMA == 'RPMA | Repulsion MA'
 		ma := rpma(src, length)
 
-    else if selectMA == 'RSRMA'
+    else if selectMA == 'RSRMA | Right Sided Ricker MA'
 		ma := rsrma(src, length)
 
-    else if selectMA == 'ZLEMA'
+    else if selectMA == 'ZLEMA | Zero Lag Exponential MA'
 		ma := zlema(src, length)
-
+    else if selectMA == 'EVWMA | Elastic Volume Weighted MA'
+        ma := evwma(src, length, volume)
 	// Output
     ma
 //
 
-selectMA 		= input.string("VWMA", options = ['SMA', 'EMA', 'ALMA', 'AHMA', 'BMF', 'DEMA', 'DSWF'
-     									, 'EVWMA', 'ESD', 'FRAMA', 'FLSMA', 'GMMA', 'HCF', 'HMA', 'JMA', 'KAMA', 'KIJUN'
-    			 						, 'LSMA', 'LMA', 'MD', 'MF', 'MM', 'SMMA', 'SSMA', 'SWMA', 'TEMA', 'TSF'
-									 	, 'VAR', 'VAMA', 'VMA', 'VBMA', 'VIDA', 'VWMA', 'WMA', 'QMA', 'RPMA'
-                                         , 'RSRMA', 'ZLEMA'], title = "General", group = 'Moving Averages')
-sma = selector(close, 30, 'SMA')
-ema = selector(close, 30, 'EMA')
-vwma = selector(close, 30, 'VWMA')
-jma = selector(close, 30, 'JMA')
-selector = selector(close, 30, selectMA)
+average_type        = input.string("EMA | Exponential MA", options = ['SMA | Simple MA'
+                                 // Basic Moving Averages
+                                 , 'EMA | Exponential MA', 'WMA | Weighted MA'
+                                 , 'VWMA | Volume Weighted MA'
+                                 // Exponential and Weighted Variants
+                                 , 'DEMA | Double Exponential MA', 'TEMA | Triple Exponential MA'
+                                 , 'ZLEMA | Zero Lag Exponential MA', 'EVWMA | Elastic Volume Weighted MA'
+                                 , 'VAMA | Volume Adjusted MA', 'VARMA | Vector Autoregression MA'
+                                 // Adaptive and Advanced Moving Averages
+                                 , 'ALMA | Arnaud Legoux MA', 'KAMA | Kaufman Adaptive MA'
+                                 , 'FRAMA | Fractal Adaptive MA', 'VIDA | Variable Index Dynamic Average'
+                                 , 'VBMA | Variable MA'
+                                 // Specialized Moving Averages
+                                 , 'AHMA | Ahrens MA', 'HMA | Hull MA', 'LMA | Leo MA'
+                                 , 'LSMA | Least Squares (Linreg)', 'SMMA | Smoothed MA'
+                                 // Ichimoku Cloud Component
+                                 , 'KIJUN | Kijun-sen (Ichimoku Component)'
+                                 // Moving Averages with Unique Weights or Filters
+                                 , 'BMF | Blackman Filter', 'DSWF | Damped Sine Wave Filter', 'HCF | Hybrid Convolution Filter'
+                                 ,  'SSMA | Shapeshifting MA', 'SWMA | Sine Weighted MA'
+                                 ,  'QMA | Quick MA', 'RPMA | Repulsion MA', 'RSRMA | Right Sided Ricker MA'
+                                 // Other
+                                 , 'MM | Moving Median', 'ESD | Ehlers Simple Decycler', 'FLSMA | Fisher Least Squares MA'
+                                 , 'GMMA | Geometric Mean MA', 'MF | Modular Filter', 'JMA | Jurik MA', 'EIT | Ehlers Instantaneous Trendline'
+                                 , 'CMA | Corrective Moving Average', 'TSF | True Strength Force', 'TMA | Triangular MA']
+                                 , title = "Moving Average Type", group = 'General')
 
-plot(sma, color = color.green)
-plot(ema, color = color.teal)
-plot(vwma, color = color.lime)
-plot(jma, color = color.olive)
 
-plot(selector, color = color.red)
+length = input(30)
+ma = selector(close, length, average_type)
+
+plot(ma, color = color.white)
