@@ -7,26 +7,27 @@ indicator("Oscillator Profile Indicator", shorttitle="OPI", overlay=false)
 // Input fields
 src         = input(close, title = "Source", inline = 'l1')
 show_colors = input.bool(true, title = "Show colors?", inline = 'l1') 
-percentile  = input(70, title = "Value Area Percentile", inline = 'l2')
+percentile  = input(70.0, title = "Value Area Percentile", inline = 'l2')
 lookback    = input(100, title = "Lookback period", inline = 'l2') 
-
 // Profiler function
 profiler(float src, simple float percentile, int lookback) =>
-
-    poc_val = 0.0
+    poc_val = ta.median(src, lookback)
     lower_boundary_val = 0.0
     upper_boundary_val = 0.0
+
+    lower_percentile = (100 - percentile) / 2 // Adjusted for confidence interval
+    upper_percentile = 100 - lower_percentile // Adjusted for confidence interval
+
     if lookback <= 100
-        poc_val := ta.percentile_linear_interpolation(src, lookback, 50)
-        lower_boundary_val := ta.percentile_linear_interpolation(src, lookback, 100 - percentile)
-        upper_boundary_val := ta.percentile_linear_interpolation(src, lookback, percentile)        
+        lower_boundary_val := ta.percentile_linear_interpolation(src, lookback, lower_percentile)
+        upper_boundary_val := ta.percentile_linear_interpolation(src, lookback, upper_percentile)
+    else
+        lower_boundary_val := ta.percentile_nearest_rank(src, lookback, lower_percentile)
+        upper_boundary_val := ta.percentile_nearest_rank(src, lookback, upper_percentile)
+
+    // Return statement outside the conditional blocks
     [poc_val, lower_boundary_val, upper_boundary_val]
-    if lookback > 100
-        poc_val := ta.percentile_nearest_rank(src, lookback, 50)
-        lower_boundary_val := ta.percentile_nearest_rank(src, lookback, 100 - percentile)
-        upper_boundary_val := ta.percentile_nearest_rank(src, lookback, percentile)
-    //
-    [poc_val, lower_boundary_val, upper_boundary_val]
+
 
 // Extract values from the profiler
 [poc_val, lower_boundary_val, upper_boundary_val] = profiler(src, percentile, lookback)
