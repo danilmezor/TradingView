@@ -5,7 +5,7 @@
 indicator("Trend Angle", overlay=false)
 
 // Libraries
-import gotbeatz26107/ma_/2 as ma
+import gotbeatz26107/ma_/4 as ma
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                               Indicator Parameters                                                 //
@@ -15,13 +15,36 @@ source              = input(close, title = 'Indicator Source', group = 'General'
 detrend             = input(false, 'Detrend Indicator?', group = 'General')
 length              = input(90, "Length", group = 'General')
 colorize			= input(true, 'Colorize Indicator?', group = 'General')
+smoother_type       = input.string('Linear Regression', title = 'Smoother Type'
+                         , options = ['Moving Average', 'Linear Regression'], group = 'Smoothing')
+average_type        = input.string('EMA | Exponential MA', options = ['SMA | Simple MA'
+                         // Basic Moving Averages
+                         , 'EMA | Exponential MA', 'WMA | Weighted MA'
+                         , 'VWMA | Volume Weighted MA'
+                         // Exponential and Weighted Variants
+                         , 'DEMA | Double Exponential MA', 'TEMA | Triple Exponential MA'
+                         , 'ZLEMA | Zero Lag Exponential MA', 'EVWMA | Elastic Volume Weighted MA'
+                         , 'VAMA | Volume Adjusted MA', 'VARMA | Vector Autoregression MA'
+                         // Adaptive and Advanced Moving Averages
+                         , 'ALMA | Arnaud Legoux MA', 'KAMA | Kaufman Adaptive MA'
+                         , 'FRAMA | Fractal Adaptive MA', 'VIDA | Variable Index Dynamic Average'
+                         , 'VBMA | Variable MA'
+                         // Specialized Moving Averages
+                         , 'AHMA | Ahrens MA', 'HMA | Hull MA', 'LMA | Leo MA'
+                         , 'LSMA | Least Squares (Linreg)', 'SMMA | Smoothed MA'
+                         // Ichimoku Cloud Component
+                         , 'KIJUN | Kijun-sen (Ichimoku Component)'
+                         // Moving Averages with Unique Weights or Filters
+                         , 'BMF | Blackman Filter', 'DSWF | Damped Sine Wave Filter', 'HCF | Hybrid Convolution Filter'
+                         ,  'SSMA | Shapeshifting MA', 'SWMA | Sine Weighted MA'
+                         ,  'QMA | Quick MA', 'RPMA | Repulsion MA', 'RSRMA | Right Sided Ricker MA'
+                         // Other
+                         , 'MM | Moving Median', 'ESD | Ehlers Simple Decycler', 'FLSMA | Fisher Least Squares MA'
+                         , 'GMMA | Geometric Mean MA', 'MF | Modular Filter', 'JMA | Jurik MA', 'EIT | Ehlers Instantaneous Trendline'
+                         , 'CMA | Corrective Moving Average', 'TSF | True Strength Force', 'TMA | Triangular MA']
+                         , title = "MA Type", group = 'Smoothing')
 
-smoother_type       = input.string('Linear Regression', title = 'Smoother Type', options = ['Moving Average', 'Linear Regression'], group = 'Smoothing')
-average_type 		= input.string("EMA", options = ['SMA', 'EMA', 'ALMA', 'AHMA', 'BMF', 'DEMA', 'DSWF'
-     									, 'EVWMA', 'ESD', 'FRAMA', 'FLSMA', 'GMMA', 'HCF', 'HMA', 'JMA', 'KAMA', 'KIJUN'
-    			 						, 'LSMA', 'LMA', 'MD', 'MF', 'MM', 'SMMA', 'SSMA', 'SWMA', 'TEMA', 'TSF'
-									 	, 'VAR', 'VAMA', 'VMA', 'VBMA', 'VIDA', 'VWMA', 'WMA', 'QMA', 'RPMA'
-                                         , 'RSRMA', 'ZLEMA'], title = "MA Type", group = 'Smoothing')
+angle_change_degree = input(5, "Angle Change Alert Threshold (degrees)", group = 'Alerts')
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                                   Calculation                                                      //
@@ -34,13 +57,16 @@ trend_angle(source, length) =>
 	angle_degrees        = angle_radians * (180 / math.pi)
 //
 angle 				= trend_angle(source, length)
-angle_smooth        = ma.selector(angle, length, average_type)
+angle_smooth        = ma.selector(angle, length, average_type) 
 regression          = ta.linreg(angle, length, 0)
 smoother            = smoother_type == 'Linear Regression' ? regression : angle_smooth
 
 // Final Calculation
 indicator           = detrend ? angle - smoother : angle
 threshold 			= detrend ? 0 : smoother
+
+// Angle change detection
+angle_change        = math.abs(angle - angle[1])
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                                    Plotting                                                        //
@@ -65,3 +91,14 @@ main_plot 			= plot(indicator, "Angle", color = angle_color)
 
 // Color fill
 fill(main_plot, smooth_plot, colorize ? angle_color : na)
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                     Alerts                                                         //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Alert for crossing zero
+alertcondition(indicator[1] < 0 and indicator > 0, title = "Cross Above Zero", message = "Trend Angle has crossed above zero.")
+alertcondition(indicator[1] > 0 and indicator < 0, title = "Cross Below Zero", message = "Trend Angle has crossed below zero.")
+
+// Alert for significant angle change
+alertcondition(angle_change > angle_change_degree, title = "Significant Angle Change", message = "Trend Angle has changed.")
