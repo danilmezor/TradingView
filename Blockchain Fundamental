@@ -2,19 +2,41 @@
 // © gotbeatz26107
 
 //@version=5
-indicator("Blockchain fundamental", shorttitle = "BF V0.1", overlay = false, precision = 2)
+indicator("Blockchain Fundamental", shorttitle = "BF", overlay = false, precision = 2)
 
 // Libraries
-import gotbeatz26107/ma_/2 as ma
+import gotbeatz26107/ma_/5 as ma
 
 // Indicator settings
 htfInterval         = input.timeframe("D", title = 'Timeframe', options = ['D', '3D', 'W', '2W', 'M'], 
                                  group = 'Indicator settings', inline = '1')
 
-average_type 		= input.string	("JMA", options = ['SMA', 'EMA', 'ALMA', 'DEMA', 'HMA'
-     									, 'JMA', 'KAMA', 'SMMA', 'TMA', 'TSF'
-    			 						, 'VAR', 'VMA', 'VAMA', 'VWMA', 'WMA'
-									 	,'WWMA', 'ZLEMA'], inline = '1', title = "Moving Average Type", group = 'Indicator settings')
+average_type        = input.string('EMA | Exponential MA', options = ['SMA | Simple MA'
+                         // Basic Moving Averages
+                         , 'EMA | Exponential MA', 'WMA | Weighted MA'
+                         , 'VWMA | Volume Weighted MA'
+                         // Exponential and Weighted Variants
+                         , 'DEMA | Double Exponential MA', 'TEMA | Triple Exponential MA'
+                         , 'ZLEMA | Zero Lag Exponential MA', 'EVWMA | Elastic Volume Weighted MA'
+                         , 'VAMA | Volume Adjusted MA', 'VARMA | Vector Autoregression MA'
+                         // Adaptive and Advanced Moving Averages
+                         , 'ALMA | Arnaud Legoux MA', 'KAMA | Kaufman Adaptive MA'
+                         , 'FRAMA | Fractal Adaptive MA', 'VIDA | Variable Index Dynamic Average'
+                         , 'VBMA | Variable MA'
+                         // Specialized Moving Averages
+                         , 'AHMA | Ahrens MA', 'HMA | Hull MA', 'LMA | Leo MA'
+                         , 'LSMA | Least Squares (Linreg)', 'SMMA | Smoothed MA'
+                         // Ichimoku Cloud Component
+                         , 'KIJUN | Kijun-sen (Ichimoku Component)'
+                         // Moving Averages with Unique Weights or Filters
+                         , 'BMF | Blackman Filter', 'DSWF | Damped Sine Wave Filter', 'HCF | Hybrid Convolution Filter'
+                         ,  'SSMA | Shapeshifting MA', 'SWMA | Sine Weighted MA'
+                         ,  'QMA | Quick MA', 'RPMA | Repulsion MA', 'RSRMA | Right Sided Ricker MA'
+                         // Other
+                         , 'MM | Moving Median', 'ESD | Ehlers Simple Decycler', 'FLSMA | Fisher Least Squares MA'
+                         , 'GMMA | Geometric Mean MA', 'MF | Modular Filter', 'JMA | Jurik MA', 'EIT | Ehlers Instantaneous Trendline'
+                         , 'CMA | Corrective Moving Average', 'TSF | True Strength Force', 'TMA | Triangular MA']
+                         , title = "MA Type", group = 'Indicator settings')
 
 osc_ma_length       = input.int(90, title = "MA length", group = "Indicator settings")
 
@@ -31,10 +53,13 @@ incl_mcap           = input.bool(true, group = "Metrics", title = "MCAP/real MCA
 incl_mcap_ratio     = input.bool(true, group = "Metrics", title = "MCAP/ Stablecoin MCAP ratio")
 incl_tx_large       = input.bool(true, group = "Metrics", title = "Transfers > $100.000")
 incl_hashrate       = input.bool(true, group = "Metrics", title = "Hashrate time delta")
-incl_miner_rev      = input.bool(true, group = "Metrics", title = "Miner revenue/number of tx's")
+// incl_miner_rev      = input.bool(true, group = "Metrics", title = "Miner revenue/number of tx's")
 incl_miner_fees     = input.bool(true, group = "Metrics", title = "Miner fees time delta")
+incl_nvt            = input.bool(true, group = "Metrics", title = "MCAP / Tx Vol Ratio", inline = 'nvt')
+nvt_use_ff          = input.bool(true, group = "Metrics", title = 'Use Free Float Mcap for NVT?', inline = 'nvt')
+incl_rpvp           = input.bool(true, group = "Metrics", title = 'VRP model')
+incl_aviv           = input.bool(true, group = "Metrics", title = 'AVIV ratio')
 
-// Kalman filter
 kalman_filter(src, Sharpness, K) =>
     
     velocity = 0.0
@@ -111,20 +136,128 @@ calculateTimeframeRatio(htf) =>
 tf_ratio            = calculateTimeframeRatio(htfInterval) 
 //
 
-percentile          = input(99, title = "Value Area Percentile", inline = 'l2', group = "Indicator settings")
+percentile          = input(90, title = "Value Area Percentile", inline = 'l2', group = "Indicator settings")
 lookback            = input(365, title = "Lookback period", inline = 'l2', group = "Indicator settings") * tf_ratio
 
 bound_up            = input(90.0, title = "Upper bound", inline = "b1", group = "Bounds")
 bound_dn            = input(-90.0, title = "Lower bound", inline = "b1", group = "Bounds")
 
 //--------------------------------------------------------------------------------------------------------------------//
-//----------------------------------------------------Calculation-----------------------------------------------------//
+//--------------------------------------------Market Related Metrics--------------------------------------------------//
 //--------------------------------------------------------------------------------------------------------------------//
+
+// Market Cap
+mcap                = request.security("GLASSNODE:" + syminfo.basecurrency + "_MARKETCAP", htfInterval, close, ignore_invalid_symbol = true)
+usdt_mcap           = request.security("CRYPTOCAP:USDT", htfInterval, close)
+usdc_mcap           = request.security("CRYPTOCAP:USDC", htfInterval, close)
+dai_mcap            = request.security("CRYPTOCAP:DAI", htfInterval, close)
+total_mcap          = request.security("CRYPTOCAP:TOTAL", htfInterval, close)
+
+// Sum of all free float supply in USD
+mcap_ff             = request.security("COINMETRICS:" + syminfo.basecurrency + "_MARKETCAPFF", htfInterval, close, ignore_invalid_symbol = true)
 
 // USD value of all coins based on a close price of the day they last moved
 mcap_real           = request.security("COINMETRICS:" + syminfo.basecurrency + "_MARKETCAPREAL", htfInterval, close, ignore_invalid_symbol = true)
-// Market Cap
-mcap                = request.security("GLASSNODE:" + syminfo.basecurrency + "_MARKETCAP", htfInterval, close, ignore_invalid_symbol = true)
+
+// Price Drawdown from ATH
+ath_drawdown        = request.security("GLASSNODE:" + syminfo.basecurrency + "_ATHDRAWDOWN", htfInterval, close, ignore_invalid_symbol = true)
+
+// Spent Output Profit Ratio (SOPR)
+sopr                = request.security("GLASSNODE:" + syminfo.basecurrency + "_SOPR", htfInterval, close, ignore_invalid_symbol = true)
+
+// Market Cap to Realised cap ratio (MVRV)
+mvrv                = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_MVRV", htfInterval, close, ignore_invalid_symbol = true)
+
+// Circulating supply
+supply_circ         = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_CIRCULATINGSUPPLY", htfInterval, close, ignore_invalid_symbol = true)
+
+// % of supply that has been active in 1 year period
+supply_active       = request.security("COINMETRICS:" + syminfo.basecurrency + "_ACTIVESUPPLY1Y", htfInterval, close, ignore_invalid_symbol = true)
+active_supply_GN    = request.security("GLASSNODE:" + syminfo.basecurrency + "_ACTIVE1Y", 'D', close, ignore_invalid_symbol = true)
+
+
+//--------------------------------------------------------------------------------------------------------------------//
+//-------------------------------------------Transaction Related Metrics----------------------------------------------//
+//--------------------------------------------------------------------------------------------------------------------//
+
+// Median transaction fees
+medianTxFees        = request.security("GLASSNODE:" + syminfo.basecurrency + "_MEDIANTXFEES", htfInterval, close, ignore_invalid_symbol = true)
+
+// Transaction count in a day
+tx_count            = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_TXCOUNT", htfInterval, close, ignore_invalid_symbol = true)
+
+// $100.000+ Transaction count in a day
+tx_count_large      = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_LARGETXCOUNT", htfInterval, close, ignore_invalid_symbol = true)
+
+// Mean transaction value 
+avg_tx              = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_AVGTX", htfInterval, close, ignore_invalid_symbol = true)
+
+// Mean transaction value  in USD
+avg_tx_usd          = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_AVGTXUSD", htfInterval, close, ignore_invalid_symbol = true)
+
+// Mean Value an address holds
+avg_balance         = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_AVGTXUSD", htfInterval, close, ignore_invalid_symbol = true)
+
+// Number of transactions that involve funds flowing into exchanges
+inflow_count        = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_INFLOWTXCOUNT", htfInterval, close, ignore_invalid_symbol = true)
+
+// Sum of all fees paid in a day
+fee_usd             = request.security("COINMETRICS:" + syminfo.basecurrency + "_FEEUSD", htfInterval, close, ignore_invalid_symbol = true)
+
+// Number of transactions in a day
+tx_count_cm         = request.security("COINMETRICS:" + syminfo.basecurrency + "_TXCOUNT", htfInterval, close, ignore_invalid_symbol = true)
+
+// Mean transfer size of an asset in USD
+tx_avg_usd          = request.security("COINMETRICS:" + syminfo.basecurrency + "_AVGTXUSD", htfInterval, close, ignore_invalid_symbol = true)
+
+// Sum of tokens transferred between addresses in a day
+tx_vol              = request.security("COINMETRICS:" + syminfo.basecurrency + "_TXVOLUME", htfInterval, close, ignore_invalid_symbol = true)
+
+// Sum of tokens transferred between addresses in a day in USD
+tx_vol_usd         = request.security("COINMETRICS:" + syminfo.basecurrency + "_TXVOLUMEUSD", htfInterval, close, ignore_invalid_symbol = true)
+tx_vol_usd2         = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_TXVOLUMEUSD", htfInterval, close, ignore_invalid_symbol = true)
+// tx_vol_usd3          = (tx_vol_usd1 + tx_vol_usd2) / 2
+// Sum of all unique transfers > $100.000 in a day
+tx_large            = request.security("COINMETRICS:" + syminfo.basecurrency + "_LARGETXCOUNT", htfInterval, close, ignore_invalid_symbol = true)
+
+// Sum of all transfers > $100.000 in a day in USD
+tx_large_usd        = request.security("COINMETRICS:" + syminfo.basecurrency + "_LARGETXVOLUMEUSD", htfInterval, close, ignore_invalid_symbol = true)
+
+//--------------------------------------------------------------------------------------------------------------------//
+//---------------------------------------------Address Related Metrics------------------------------------------------//
+//--------------------------------------------------------------------------------------------------------------------//
+
+
+// Percentage of break even addresses out of all addresses holding this asset
+even_perc           = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_BREAKEVENADDRESSESPERCENTAGE", htfInterval, close, ignore_invalid_symbol = true)
+
+// Percentage of addresses that are profiting at current price
+profit_perc         = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_INOUTMONEYINPERCENTAGE", htfInterval, close, ignore_invalid_symbol = true)
+
+
+// Percentage of addresses that are losing at current price
+loss_perc           = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_INOUTMONEYOUTPERCENTAGE", htfInterval, close, ignore_invalid_symbol = true)
+
+//--------------------------------------------------------------------------------------------------------------------//
+//-------------------------------------------Miner related metrics----------------------------------------------------//
+//--------------------------------------------------------------------------------------------------------------------//
+
+// Current block number
+num_blocks          = request.security("GLASSNODE:" + syminfo.basecurrency + "_BLOCKS", htfInterval, close, ignore_invalid_symbol = true)
+
+// Hashrate
+hashrate            = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_HASHRATE", htfInterval, close, ignore_invalid_symbol = true)
+
+//--------------------------------------------------------------------------------------------------------------------//
+//------------------------------------------Block Related Metrics-----------------------------------------------------//
+//--------------------------------------------------------------------------------------------------------------------//
+
+// Mean Hash Rate
+hashRate            = request.security("GLASSNODE:" + syminfo.basecurrency + "_HASHRATE", htfInterval, close, ignore_invalid_symbol = true)
+
+//--------------------------------------------------------------------------------------------------------------------//
+//-----------------------------------------------------Plotting-------------------------------------------------------//
+//--------------------------------------------------------------------------------------------------------------------//
 
 mcap() =>
 
@@ -156,9 +289,6 @@ mcap() =>
     // Output
     mcap_score
 //
-
-// Spent Output Profit Ratio (SOPR)
-sopr                = request.security("GLASSNODE:" + syminfo.basecurrency + "_SOPR", htfInterval, close, ignore_invalid_symbol = true)
 sopr() =>
 
     // Calculation
@@ -189,14 +319,6 @@ sopr() =>
     // Output
     soprScore
 //
-
-// Percentage of addresses that are profiting at current price
-profit_perc         = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_INOUTMONEYINPERCENTAGE", htfInterval, close, ignore_invalid_symbol = true)
-// Percentage of break even addresses out of all addresses holding this asset
-even_perc           = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_BREAKEVENADDRESSESPERCENTAGE", htfInterval, close, ignore_invalid_symbol = true)
-// Percentage of addresses that are losing at current price
-loss_perc           = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_INOUTMONEYOUTPERCENTAGE", htfInterval, close, ignore_invalid_symbol = true)
-
 pnl_perc() =>
 
     net_pnl_perc = (profit_perc + even_perc) - (loss_perc + even_perc)
@@ -228,10 +350,6 @@ pnl_perc() =>
     // Output
     pnl_perc_score
 //
-
-// Price Drawdown from ATH
-ath_drawdown        = request.security("GLASSNODE:" + syminfo.basecurrency + "_ATHDRAWDOWN", htfInterval, close, ignore_invalid_symbol = true)
-
 drawdown_score() =>
 
     [poc_val, _, _] = profiler(ath_drawdown, percentile, lookback)
@@ -259,42 +377,28 @@ drawdown_score() =>
     // Output
     ath_drawdown_score
 //
+mvrv() => 
+    [poc, lower, upper] = profiler(mvrv, percentile, lookback)
+    mvrv_score = (mvrv > upper ? 33.3 : 0) + (mvrv > (upper + poc) / 2 ? 33.4 : 0) + (mvrv > poc ? 33.3 : 0) 
+             + (mvrv < poc ? -33.3 : 0) + (mvrv < (poc + lower) / 2 ? -33.4 : 0) + (mvrv < lower ? -33.3 : 0)
 
-// Market Cap to Realised cap ratio (MVRV)
-mvrv                = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_MVRV", htfInterval, close, ignore_invalid_symbol = true)
+    var mcap_array = array.new<float>()
+    array.push(mcap_array, mcap_ff)
+    StdDevA = array.stdev(mcap_array)
 
-mvrv() =>
+    z = (mcap_ff - mcap_real) / StdDevA
 
-    mvrv_score = 0
-    mvrv_30 = ma.selector(mvrv, 30 * tf_ratio, average_type)
-    mvrv_1y = ma.selector(mvrv, 365 * tf_ratio, average_type)
+    [poc_z, lower_z, upper_z] = profiler(z, percentile, lookback)
+    z_score = (z > upper_z ? 33.3 : 0) + (z > (upper_z + poc_z) / 2 ? 33.4 : 0) + (z > poc_z ? 33.3 : 0) 
+             + (z < poc_z ? -33.3 : 0) + (z < (poc_z + lower_z) / 2 ? -33.4 : 0) + (z < lower_z ? -33.3 : 0)
 
-
-    if mvrv < 2
-        mvrv_score -= 25
-    if mvrv < 1
-        mvrv_score -= 25
-    if mvrv_30 < 1
-        mvrv_score -= 25
-    if mvrv < mvrv_1y
-        mvrv_score -= 25
-
-    if mvrv > 3
-        mvrv_score += 25
-    if mvrv > 2
-        mvrv_score += 25
-    if mvrv_30 > 2
-        mvrv_score += 25
-    if mvrv > mvrv_1y
-        mvrv_score += 25
-
-    // output
-    mvrv_score
+    count = 0
+    if not na(mvrv)
+        count += 1
+    if not na(z_score)
+        count += 1
+    score = (nz(mvrv_score) + nz(z_score)) / count
 //
-
-// Mean Value an address holds
-avg_balance         = request.security("INTOTHEBLOCK:" + syminfo.basecurrency + "_AVGTXUSD", htfInterval, close, ignore_invalid_symbol = true)
-
 avg_balance() =>
 
     avg_balance_30 = ma.selector(math.log(avg_balance), 30 * tf_ratio, average_type)
@@ -326,10 +430,6 @@ avg_balance() =>
     // Output
     avg_balance_score
 //
-
-// Sum of all transfers > $100.000 in a day in USD
-tx_large_usd        = request.security("COINMETRICS:" + syminfo.basecurrency + "_LARGETXVOLUMEUSD", htfInterval, close, ignore_invalid_symbol = true)
-
 tx_large() =>
 
     tx_large_30 = ma.selector(math.log(tx_large_usd), 30 * tf_ratio, average_type)
@@ -360,11 +460,6 @@ tx_large() =>
     // Output
     tx_large_score
 //
-
-// Mean Hash Rate
-hashRate            = request.security("GLASSNODE:" + syminfo.basecurrency + "_HASHRATE", htfInterval, close, ignore_invalid_symbol = true)
-
-
 hashrate() =>
 
     hashRate_30 = math.log(ma.selector(hashRate, 30 * tf_ratio, average_type))
@@ -399,52 +494,9 @@ hashrate() =>
     hash_score
 //
 
-// A chart showing miners revenue divided by the number of transactions.
-miner_revenue_txdivided = request.quandl("BCHAIN/CPTRA") 
-
-
-miner_rev_divided() =>
-
-    mrtd = math.log10(miner_revenue_txdivided)
-    mrtd_30 = ma.selector(mrtd, 30 * tf_ratio, average_type)
-    mrtd_90 = ma.selector(mrtd, 90 * tf_ratio, average_type)
-    mrtd_365 = ma.selector(mrtd, 365 * tf_ratio, average_type)
-    mrtd_dev = bbr(mrtd, 365 * tf_ratio)
-
-    mrtd_score = 0
-
-    if mrtd >= mrtd_30
-        mrtd_score += 20
-    if mrtd_30 >= mrtd_90
-        mrtd_score += 20
-    if mrtd_90 >= mrtd_365
-        mrtd_score += 20
-    if mrtd_dev >= 0.5
-        mrtd_score += 20
-    if mrtd_dev >= 1
-        mrtd_score += 20
-
-    if mrtd <= mrtd_30
-        mrtd_score -= 20
-    if mrtd_30 <= mrtd_90
-        mrtd_score -= 20
-    if mrtd_90 <= mrtd_365
-        mrtd_score -= 20
-    if mrtd_dev <= 0.5
-        mrtd_score -= 20
-    if mrtd_dev <= 0
-        mrtd_score -= 20
-    
-    // Output
-    mrtd_score
-//
-
-// The total value of all transaction fees paid to miners in USD (not including the coinbase value of block rewards).
-miner_fees_usd      = request.quandl("BCHAIN/TRFUS")
-
 miner_fees_usd() =>
 
-    fees_usd = math.log10(miner_fees_usd)
+    fees_usd = math.log10(fee_usd)
     fees_30 = ma.selector(fees_usd, 30 * tf_ratio, average_type)
     fees_90 = ma.selector(fees_usd, 90 * tf_ratio, average_type)
     fees_365 = ma.selector(fees_usd, 365 * tf_ratio, average_type)
@@ -477,38 +529,90 @@ miner_fees_usd() =>
     // Output
     fees_score
 //
-
-usdt_mcap           = request.security("CRYPTOCAP:USDT", htfInterval, close)
-usdc_mcap           = request.security("CRYPTOCAP:USDC", htfInterval, close)
-dai_mcap            = request.security("CRYPTOCAP:DAI", htfInterval, close)
-
 mcap_ratio() =>
 
-    stablecoin_mcap = usdt_mcap + usdc_mcap + dai_mcap
-
+    stablecoin_mcap = nz(usdt_mcap) + nz(usdc_mcap) + nz(dai_mcap)
     mcap_ratio = mcap / stablecoin_mcap
-    mcap_ratio_30 = ma.selector(mcap_ratio, 30 * tf_ratio, average_type)
-    mcap_ratio_90 = ma.selector(mcap_ratio, 90 * tf_ratio, average_type)
-    mcap_ratio_365 = ma.selector(mcap_ratio, 365 * tf_ratio, average_type)
 
-    mcap_score = 0.0
+    mcap_ma = math.log(ta.ema(mcap_ratio,10))
+    [poc, lower, upper] = profiler(mcap_ma, percentile, 90 * tf_ratio)
 
-    if mcap_ratio >= mcap_ratio_30
-        mcap_score += 33.4
-    if mcap_ratio_30 >= mcap_ratio_90
-        mcap_score += 33.3
-    if mcap_ratio_90 >= mcap_ratio_365
-        mcap_score += 33.3
+    score = (mcap_ma > upper ? 33.3 : 0) + (mcap_ma > (upper + poc) / 2 ? 33.3 : 0) + (mcap_ma > poc ? 33.4 : 0) 
+             + (mcap_ma < poc ? -33.4 : 0) + (mcap_ma < (poc + lower) / 2 ? -33.3 : 0) + (mcap_ma < lower ? -33.3 : 0)
+//
+tx_vol_90 = ta.sma(tx_vol_usd, 90)
+nvt(market_cap, percentile, lookback) =>
 
-    if mcap_ratio <= mcap_ratio_30
-        mcap_score -= 33.4
-    if mcap_ratio_30 <= mcap_ratio_90
-        mcap_score -= 33.3
-    if mcap_ratio_90 <= mcap_ratio_365
-        mcap_score -= 33.3
-    
-    // Output
-    mcap_score
+    nvts = market_cap / tx_vol_90
+    [poc, lower, upper] = profiler(nvts, percentile, lookback)
+
+    score = (nvts > upper ? 33.3 : 0) + (nvts > (upper + poc) / 2 ? 33.3 : 0) + (nvts > poc ? 33.4 : 0) 
+             + (nvts < poc ? -33.4 : 0) + (nvts < (poc + lower) / 2 ? -33.3 : 0) + (nvts < lower ? -33.3 : 0)
+
+//
+nvt_final() =>
+    nvt1 = nvt(mcap, percentile, lookback)
+    nvt_ff = nvt(mcap_ff, percentile, lookback)
+    nvt_score = nvt_use_ff ? nvt_ff : nvt1
+//
+rpvp_score() =>
+    // Supply
+    active_supply_percentage = ((supply_active / 100) + (1 - active_supply_GN)) / 2
+    active_supply = (active_supply_percentage) * supply_circ
+    vaulted_supply = supply_circ - active_supply
+
+    vaultedness = vaulted_supply / supply_circ
+    realized_price = mcap_real / supply_circ
+    vaulted_realized_price = realized_price / vaultedness
+
+    vrp_bound_low1 = vaulted_realized_price * 0.55
+    vrp_bound_low2 = vaulted_realized_price * 0.675
+    vrp_bound_high1 = vaulted_realized_price * 1.465
+    vrp_bound_high2 = vaulted_realized_price * 2
+
+    vrp_score = (close > vaulted_realized_price ? 20 : 0) + (close > (vaulted_realized_price + vrp_bound_high1) / 2 ? 20 : 0) 
+             + (close > vrp_bound_high1 ? 20 : 0) + (close > (vrp_bound_high1 + vrp_bound_high2) / 2 ? 20 : 0) 
+             + (close > vrp_bound_high2 ? 20 : 0)
+             + (close < vaulted_realized_price ? -20 : 0) + (close < (vaulted_realized_price + vrp_bound_low2) / 2 ? -20 : 0)
+             + (close < vrp_bound_low2 ? -20 : 0) + (close < (vrp_bound_low1 + vrp_bound_low2) / 2 ? -20 : 0)
+             + (close < vrp_bound_low1 ? -20 : 0)
+//
+aviv() =>
+    active_supply_percentage = ((supply_active / 100) + (1 - active_supply_GN)) / 2
+    active_supply = (active_supply_percentage) * supply_circ
+    // calculate miner reward
+    float block_reward = na
+    if (num_blocks <= 210000)
+        block_reward := 50
+    else if (num_blocks <= 420000)
+        block_reward := 25
+    else if (num_blocks <= 630000)
+        block_reward := 12.5
+    else if (num_blocks <= 840000)
+        block_reward := 6.25
+    else if (num_blocks <= 1050000)
+        block_reward := 3.125
+
+    blocks_mined_today = num_blocks - num_blocks[1]
+    blocks_mined_today := blocks_mined_today < 0 ? 1 : blocks_mined_today
+    btc_mined_today = blocks_mined_today * block_reward
+
+    btc_reward_today = btc_mined_today
+
+    // Cumulative Thermocap Calculation
+    var float thermocap = na
+    thermocap := nz(thermocap[1], 0) + btc_reward_today
+
+    investor_cap = mcap_real - thermocap
+    aviv_ratio = (active_supply * close) / investor_cap
+
+    aviv_365 = ta.sma(aviv_ratio, math.min(bar_index + 1, 365))
+    aviv_delta = aviv_ratio - aviv_365 // !
+
+    aviv_score = (aviv_delta > 0.071 ? 20 : 0) + (aviv_delta > 0.240 ? 20 : 0) + (aviv_delta > 0.366 ? 20 : 0)
+                 + (aviv_delta > 0.5 ? 20 : 0) + (aviv_delta > 0.79 ? 20 : 0)
+                 + (aviv_delta < 0.071 ? -20 : 0) + (aviv_delta < -0.099 ? -20 : 0) + (aviv_delta < -0.307 ? -20 : 0)
+                 + (aviv_delta < -0.434 ? -20 : 0) + (aviv_delta < -0.475 ? -20 : 0)
 //
 
 balance = 0
@@ -517,7 +621,7 @@ drawdown = 0
 drawdown := incl_drawdown ? drawdown_score() : 0
 sopr_ = 0
 sopr_ := incl_sopr ? sopr() : 0
-mvrv_ = 0
+mvrv_ = 0.0
 mvrv_ := incl_mvrv ? mvrv() : 0
 pnl = 0
 pnl := incl_pnl_perc ? pnl_perc() : 0
@@ -529,10 +633,16 @@ tx_large_ = 0
 tx_large_ := incl_tx_large ? tx_large() : 0 
 hrate = 0
 hrate := incl_hashrate ? hashrate() : 0
-miner_rev_ = 0
-miner_rev_ := incl_miner_rev ? miner_rev_divided() : 0
+// miner_rev_ = 0
+// miner_rev_ := incl_miner_rev ? miner_rev_divided() : 0
 miner_fee_usd = 0
 miner_fee_usd := incl_miner_fees ? miner_fees_usd() : 0
+nvt_score = 0.0
+nvt_score := incl_nvt ? nvt_final() : 0
+rpvp_score = 0.0
+rpvp_score := incl_rpvp ? rpvp_score() : 0
+aviv_score = 0
+aviv_score := incl_aviv ? aviv() : 0
 
 counter() => 
 
@@ -554,32 +664,35 @@ counter() =>
         count += 1
     if hashrate() != 0 and incl_hashrate
         count += 1
-    if miner_rev_divided() != 0 and incl_miner_rev
-        count += 1
+    // if miner_rev_divided() != 0 and incl_miner_rev
+    //     count += 1
     if miner_fees_usd() != 0 and incl_miner_fees
         count += 1
     if mcap_ratio() != 0 and incl_mcap_ratio
+        count += 1
+    if nvt_final() != 0 and incl_nvt
+        count += 1
+    if rpvp_score() != 0 and incl_rpvp
+        count += 1
+    if aviv() != 0 and incl_aviv
         count += 1
     // Output
     count
 //
 count = counter()
 
-fundamental = (balance + drawdown + sopr_ + mvrv_ + pnl + mcap_ + mcap_ratio_ + tx_large_ + hrate + miner_rev_ + miner_fee_usd ) / count
+fundamental = (balance + drawdown + sopr_ + mvrv_ + pnl + mcap_ + mcap_ratio_ + tx_large_ + hrate + nvt_score
+              + miner_fee_usd + rpvp_score + aviv_score) / count
 fundamental_ma = ma.selector(fundamental, osc_ma_length * tf_ratio, average_type)
 fundamental_kalman = kalman_filter(fundamental, Sharpness, K)
 signal = use_kalman ? fundamental_kalman : fundamental
-
-//--------------------------------------------------------------------------------------------------------------------//
-//-----------------------------------------------------Plotting-------------------------------------------------------//
-//--------------------------------------------------------------------------------------------------------------------//
 
 plot(fundamental, color = color.white, title = "Signal oscillator")
 plot(fundamental_ma, color = color.yellow, title = "Signal Oscillator MA")
 plot(fundamental_kalman, color = color.orange, title = "Signal Oscillator Kalman")
 plot(count, color = color.rgb(120, 123, 134, 50), title = "Signal counter")
 
-hline(0, title = "Zero line")
+hline((bound_up + bound_dn) / 2, title = "Zero line")
 hline(bound_up, title = "Bound up")
 hline(bound_dn, title = "Bound down")
 
