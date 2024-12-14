@@ -1,0 +1,202 @@
+//@version=6
+indicator('Market Structure', overlay = true)
+
+// Libraries
+import gotbeatz26107/ma_/4 as ma
+
+// User Inputs
+ma_settings = 'Moving Average Settings'
+structure_settings = 'Market Structure Settings'
+swingSize = input.int(20, 'Swing Size', tooltip = 'Number of bars for swing detection', group = structure_settings)
+useClose = input.bool(true, 'Use Close Price', tooltip = 'Use close price instead of high/low for breakouts', group = structure_settings)
+breakoutThreshold = input.int(3, 'Breakout Threshold', tooltip = 'Number of consecutive breaks needed to adjust structure', group = structure_settings)
+offset_structure = input.bool(true, 'Offset Market Structure?', tooltip = 'Offset structure lines by swing size', group = structure_settings)
+
+// Moving Average Selection
+average_type = input.string('KAMA | Kaufman Adaptive MA', 
+                          options = ['SMA | Simple MA'
+                                 , 'EMA | Exponential MA', 'WMA | Weighted MA'
+                                 , 'VWMA | Volume Weighted MA'
+                                 // Exponential and Weighted Variants
+                                 , 'DEMA | Double Exponential MA', 'TEMA | Triple Exponential MA'
+                                 , 'ZLEMA | Zero Lag Exponential MA', 'EVWMA | Elastic Volume Weighted MA'
+                                 , 'VAMA | Volume Adjusted MA', 'VARMA | Vector Autoregression MA'
+                                 // Adaptive and Advanced Moving Averages
+                                 , 'ALMA | Arnaud Legoux MA', 'KAMA | Kaufman Adaptive MA'
+                                 , 'FRAMA | Fractal Adaptive MA', 'VIDA | Variable Index Dynamic Average'
+                                 , 'VBMA | Variable MA'
+                                 // Specialized Moving Averages
+                                 , 'AHMA | Ahrens MA', 'HMA | Hull MA', 'LMA | Leo MA'
+                                 , 'LSMA | Least Squares (Linreg)', 'SMMA | Smoothed MA'
+                                 // Ichimoku Cloud Component
+                                 , 'KIJUN | Kijun-sen (Ichimoku Component)'
+                                 // Moving Averages with Unique Weights or Filters
+                                 , 'BMF | Blackman Filter', 'DSWF | Damped Sine Wave Filter', 'HCF | Hybrid Convolution Filter'
+                                 , 'SSMA | Shapeshifting MA', 'SWMA | Sine Weighted MA'
+                                 , 'QMA | Quick MA', 'RPMA | Repulsion MA', 'RSRMA | Right Sided Ricker MA'
+                                 // Other
+                                 , 'MM | Moving Median', 'ESD | Ehlers Simple Decycler', 'FLSMA | Fisher Least Squares MA'
+                                 , 'GMMA | Geometric Mean MA', 'MF | Modular Filter', 'JMA | Jurik MA', 'EIT | Ehlers Instantaneous Trendline'
+                                 , 'CMA | Corrective Moving Average', 'TSF | True Strength Force', 'TMA | Triangular MA']
+                                 , title = 'Moving Average Type', group = ma_settings)
+
+// Structure Variables
+var float generalHighPrice = na
+var float generalLowPrice = na
+var bool generalHighActive = false
+var bool generalLowActive = false
+var int consecutiveUpBreaks = 0
+var int consecutiveDownBreaks = 0
+
+var float internalHighPrice = na
+var float internalLowPrice = na
+var bool internalHighActive = false
+var bool internalLowActive = false
+
+var float lastPivotHigh = na
+var float lastPivotLow = na
+
+// Pivot Detection Function
+isPivot(idx, type) =>
+    array<float> highs = array.new_float(0)
+    array<float> lows = array.new_float(0)
+    
+    for i = 1 to swingSize by 1
+        array.push(highs, high[idx + i])
+        array.push(highs, high[idx - i])
+        array.push(lows, low[idx + i])
+        array.push(lows, low[idx - i])
+    
+    bool isHigh = type == 'high' and high[idx] > array.max(highs)
+    bool isLow = type == 'low' and low[idx] < array.min(lows)
+    
+    type == 'high' ? isHigh : isLow
+
+// Pivot Classification Function
+getPivotType(price, lastPrice, type) =>
+    string classification = na
+    if type == 'high'
+        classification := na(lastPrice) or price >= lastPrice ? 'HH' : 'LH'
+        classification
+    else
+        classification := na(lastPrice) or price <= lastPrice ? 'LL' : 'HL'
+        classification
+    classification
+
+// Detect Pivots
+float pivotHigh = na
+float pivotLow = na
+string pivotType = na
+
+if isPivot(swingSize, 'high')
+    pivotHigh := high[swingSize]
+    pivotType := getPivotType(pivotHigh, lastPivotHigh, 'high')
+    lastPivotHigh := pivotHigh
+    lastPivotHigh
+
+if isPivot(swingSize, 'low')
+    pivotLow := low[swingSize]
+    pivotType := getPivotType(pivotLow, lastPivotLow, 'low')
+    lastPivotLow := pivotLow
+    lastPivotLow
+
+// Update Internal Structure
+if not na(pivotHigh)
+    if pivotType == 'HH' or na(internalHighPrice)
+        internalHighPrice := pivotHigh
+        internalHighActive := true
+        internalHighActive
+    else if pivotType == 'LH'
+        internalHighPrice := pivotHigh
+        internalHighActive := true
+        internalHighActive
+
+if not na(pivotLow)
+    if pivotType == 'LL' or na(internalLowPrice)
+        internalLowPrice := pivotLow
+        internalLowActive := true
+        internalLowActive
+    else if pivotType == 'HL'
+        internalLowPrice := pivotLow
+        internalLowActive := true
+        internalLowActive
+
+// Update General Structure
+if not na(pivotHigh)
+    if na(generalHighPrice)
+        generalHighPrice := pivotHigh
+        generalHighActive := true
+        generalHighActive
+    else if pivotHigh > generalHighPrice
+        generalHighPrice := pivotHigh
+        generalHighActive := true
+        consecutiveDownBreaks := 0
+        consecutiveDownBreaks
+
+if not na(pivotLow)
+    if na(generalLowPrice)
+        generalLowPrice := pivotLow
+        generalLowActive := true
+        generalLowActive
+    else if pivotLow < generalLowPrice
+        generalLowPrice := pivotLow
+        generalLowActive := true
+        consecutiveUpBreaks := 0
+        consecutiveUpBreaks
+
+// Check Breakouts
+float checkPrice = useClose ? close : high
+float checkPriceLow = useClose ? close : low
+
+// Handle Structure Breakouts
+if generalHighActive and checkPrice > generalHighPrice
+    generalHighActive := false
+    consecutiveUpBreaks := consecutiveUpBreaks + 1
+    consecutiveDownBreaks := 0
+    consecutiveDownBreaks
+
+if generalLowActive and checkPriceLow < generalLowPrice
+    generalLowActive := false
+    consecutiveDownBreaks := consecutiveDownBreaks + 1
+    consecutiveUpBreaks := 0
+    consecutiveUpBreaks
+
+// Internal Structure Breakouts
+if internalHighActive and checkPrice > internalHighPrice
+    internalHighActive := false
+    internalHighActive
+
+if internalLowActive and checkPriceLow < internalLowPrice
+    internalLowActive := false
+    internalLowActive
+
+// Adjust General Structure Based on Consecutive Breaks
+if consecutiveUpBreaks >= breakoutThreshold and not na(internalLowPrice) and not na(generalLowPrice)
+    if internalLowPrice > generalLowPrice
+        generalLowPrice := internalLowPrice
+        generalLowActive := internalLowActive
+        generalLowActive
+    consecutiveUpBreaks := 0
+    consecutiveUpBreaks
+
+if consecutiveDownBreaks >= breakoutThreshold and not na(internalHighPrice) and not na(generalHighPrice)
+    if internalHighPrice < generalHighPrice
+        generalHighPrice := internalHighPrice
+        generalHighActive := internalHighActive
+        generalHighActive
+    consecutiveDownBreaks := 0
+    consecutiveDownBreaks
+
+// Moving Average Calculation
+source_ma = ma.selector(close, swingSize, average_type)
+
+// Plotting
+plot(generalHighPrice, 'General High', color = color.red, linewidth = 2, style = plot.style_linebr, offset = offset_structure ? -swingSize : 0)
+plot(generalLowPrice, 'General Low', color = color.teal, linewidth = 2, style = plot.style_linebr, offset = offset_structure ? -swingSize : 0)
+plot(internalHighPrice, 'Internal High', color = color.new(color.red, 50), linewidth = 1, style = plot.style_linebr, offset = offset_structure ? -swingSize : 0)
+plot(internalLowPrice, 'Internal Low', color = color.new(color.teal, 50), linewidth = 1, style = plot.style_linebr, offset = offset_structure ? -swingSize : 0)
+
+plotshape(not na(pivotHigh), 'Pivot High', style = shape.triangledown, location = location.abovebar, color = color.red, size = size.tiny, offset = -swingSize)
+plotshape(not na(pivotLow), 'Pivot Low', style = shape.triangleup, location = location.belowbar, color = color.teal, size = size.tiny, offset = -swingSize)
+
+plot(source_ma, 'Moving Average', color = color.gray, linewidth = 2)
